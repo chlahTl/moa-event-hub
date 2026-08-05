@@ -1,4 +1,4 @@
-import AdminDashboard from "./AdminDashboard";
+import AdminDashboard from "./StampTourDashboard";
 
 export default function AdminPage() {
   return <AdminDashboard />;

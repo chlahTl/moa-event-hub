@@ -39,7 +39,7 @@ test("server-renders the Moa landing page", async () => {
 test("uses native navigation links that work in the vinext client", async () => {
   const [landing, dashboard] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/admin/AdminDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/StampTourDashboard.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(landing, /next\/link/);
@@ -53,7 +53,7 @@ test("keeps participant names and club responses connected", async () => {
     readFile(new URL("../app/api/responses/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/admin/AdminDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/StampTourDashboard.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(visitForm, /name="participantName"/);
@@ -97,7 +97,7 @@ test("stamp APIs keep identity server-side and validate event ownership", async 
     readFile(new URL("../lib/participant-session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/tour/[inviteToken]/join/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/stamps/claim/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/admin/AdminDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/StampTourDashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/join/[inviteToken]/EventTour.tsx", import.meta.url), "utf8"),
   ]);
 
