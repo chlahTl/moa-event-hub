@@ -1,18 +1,31 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { clubs, events, responses } from "../../../db/schema";
+import { authorizeAdminRequest } from "../../chatgpt-auth";
+import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
 function csvCell(value: string | null) {
-  return `"${(value ?? "").replaceAll('"', '""')}"`;
+  const raw = value ?? "";
+  const escapedFormula = /^[=+\-@]/.test(raw.trimStart()) || /^[\t\r]/.test(raw)
+    ? `'${raw}`
+    : raw;
+  return `"${escapedFormula.replaceAll('"', '""')}"`;
 }
 
 export async function GET(request: Request) {
+  const authorization = authorizeAdminRequest(request);
+  if (!authorization.authorized) return authorization.response;
+
   try {
-    const eventId = new URL(request.url).searchParams.get("eventId");
-    const clubId = new URL(request.url).searchParams.get("clubId");
-    if (!eventId) return Response.json({ error: "eventId가 필요합니다." }, { status: 400 });
+    const eventId = new URL(request.url).searchParams.get("eventId")?.trim() ?? "";
+    const clubId = new URL(request.url).searchParams.get("clubId")?.trim() ?? "";
+    if (!isUuid(eventId)) return apiError("행사 정보 형식을 확인해 주세요.", 400);
+    if (clubId && !isUuid(clubId)) return apiError("동아리 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
+    const [event] = await db.select({ id: events.id }).from(events)
+      .where(and(eq(events.id, eventId), isNull(events.deletedAt))).limit(1);
+    if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
     const rows = await db
       .select({
         eventName: events.name,
@@ -27,8 +40,8 @@ export async function GET(request: Request) {
       .innerJoin(events, eq(responses.eventId, events.id))
       .innerJoin(clubs, eq(responses.clubId, clubs.id))
       .where(clubId
-        ? and(eq(responses.eventId, eventId), eq(responses.clubId, clubId))
-        : eq(responses.eventId, eventId));
+        ? and(eq(responses.eventId, eventId), eq(responses.clubId, clubId), isNull(events.deletedAt))
+        : and(eq(responses.eventId, eventId), isNull(events.deletedAt)));
 
     if (clubId && !rows.length) {
       const club = await db
@@ -47,12 +60,11 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="moa-${clubId ? `club-${clubId}` : `event-${eventId}`}.csv"`,
+        "Cache-Control": "no-store, private",
+        "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "엑셀용 파일을 만들지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("엑셀용 파일을 만들지 못했습니다.");
   }
 }

@@ -1,23 +1,24 @@
-name: Deploy Moa
+name: Verify Moa
 
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: moa-production
-  cancel-in-progress: false
+  group: moa-verify-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Build and deploy
+  verify:
+    name: Lint, test, and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - name: Check out repository
@@ -26,75 +27,23 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.13.0
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify application
+      - name: Lint source
+        run: npm run lint
+
+      - name: Test production bundle and core flows
         run: npm test
 
-      - name: Create or find D1 database
-        shell: bash
+      - name: Explain the publishing boundary
         run: |
-          database_list="$(npx wrangler@latest d1 list --json)"
-          database_id="$(DB_LIST_JSON="$database_list" node -e '
-            const rows = JSON.parse(process.env.DB_LIST_JSON || "[]");
-            const match = rows.find((row) => row.name === "moa-event-hub-db");
-            process.stdout.write(match?.uuid || match?.database_id || "");
-          ')"
-
-          if [ -z "$database_id" ]; then
-            npx wrangler@latest d1 create moa-event-hub-db --location apac
-            database_list="$(npx wrangler@latest d1 list --json)"
-            database_id="$(DB_LIST_JSON="$database_list" node -e '
-              const rows = JSON.parse(process.env.DB_LIST_JSON || "[]");
-              const match = rows.find((row) => row.name === "moa-event-hub-db");
-              process.stdout.write(match?.uuid || match?.database_id || "");
-            ')"
-          fi
-
-          if [ -z "$database_id" ]; then
-            echo "D1 database ID could not be resolved."
-            exit 1
-          fi
-
-          echo "MOA_D1_DATABASE_ID=$database_id" >> "$GITHUB_ENV"
-
-      - name: Build production bundle
-        run: npm run build
-
-      - name: Configure production bindings
-        run: |
-          node - <<'NODE'
-          const fs = require("node:fs");
-          const path = "dist/server/wrangler.json";
-          const config = JSON.parse(fs.readFileSync(path, "utf8"));
-
-          delete config.legacy_env;
-          config.name = "moa-event-hub";
-          config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID;
-          config.d1_databases = [{
-            binding: "DB",
-            database_name: "moa-event-hub-db",
-            database_id: process.env.MOA_D1_DATABASE_ID,
-          }];
-
-          fs.writeFileSync(path, JSON.stringify(config, null, 2));
-          NODE
-
-      - name: Deploy to Cloudflare Workers
-        shell: bash
-        run: |
-          deploy_output="$(npx wrangler@latest deploy --config dist/server/wrangler.json)"
-          echo "$deploy_output"
-          deploy_url="$(printf '%s\n' "$deploy_output" | grep -Eo 'https://[^[:space:]]+\.workers\.dev' | tail -1)"
-
           {
-            echo "## 모아 배포 완료"
-            if [ -n "$deploy_url" ]; then
-              echo ""
-              echo "서비스 주소: [$deploy_url]($deploy_url)"
-            fi
+            echo "## 모아 검증 완료"
+            echo
+            echo "관리자 인증은 Sites가 제공하는 ChatGPT 로그인 계층을 사용합니다."
+            echo "운영 데이터베이스 마이그레이션과 배포는 별도 승인된 Sites 배포에서 진행합니다."
           } >> "$GITHUB_STEP_SUMMARY"

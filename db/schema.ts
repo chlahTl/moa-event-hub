@@ -13,7 +13,28 @@ export const events = sqliteTable("events", {
   status: text("status").notNull().default("active"),
   inviteToken: text("invite_token"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [uniqueIndex("events_invite_token_unique").on(table.inviteToken)]);
+  updatedAt: text("updated_at"),
+  deletedAt: text("deleted_at"),
+  deletedBy: text("deleted_by"),
+}, (table) => [
+  uniqueIndex("events_invite_token_unique").on(table.inviteToken),
+  index("idx_events_deleted_event_date").on(table.deletedAt, table.eventDate),
+]);
+
+export const adminAuditLogs = sqliteTable("admin_audit_logs", {
+  id: text("id").primaryKey(),
+  // Deliberately not a foreign key: permanent event deletion must not erase its audit trail.
+  eventId: text("event_id"),
+  eventName: text("event_name").notNull().default(""),
+  action: text("action").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  details: text("details").notNull().default("{}"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("idx_admin_audit_logs_event_created").on(table.eventId, table.createdAt),
+  index("idx_admin_audit_logs_actor_created").on(table.actorEmail, table.createdAt),
+]);
 
 export const clubs = sqliteTable("clubs", {
   id: text("id").primaryKey(),

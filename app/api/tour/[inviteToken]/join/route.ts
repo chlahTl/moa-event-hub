@@ -8,6 +8,7 @@ import {
 } from "../../../../../lib/participant-session";
 import { buildTourPayload, findEventByInviteToken, findParticipant } from "../../../../../lib/tour-data";
 import { AGE_GROUPS, GENDERS, getEventAvailability, normalizeParticipantName } from "../../../../../lib/tour";
+import { apiError, internalApiError, readJsonObject, stringField } from "../../../../../lib/api-response";
 
 export async function POST(
   request: Request,
@@ -15,22 +16,25 @@ export async function POST(
 ) {
   try {
     const { inviteToken } = await context.params;
-    const body = (await request.json()) as { participantName?: string; gender?: string; ageGroup?: string };
+    const body = await readJsonObject(request);
+    if (!body) return apiError("요청 내용을 확인해 주세요.", 400);
     await ensureDatabase();
     const event = await findEventByInviteToken(inviteToken);
     if (!event) return Response.json({ error: "유효하지 않은 행사 초대 QR입니다." }, { status: 404 });
     const availability = getEventAvailability(event);
     if (!availability.available) return Response.json({ error: availability.message }, { status: 410 });
 
-    const participantName = normalizeParticipantName(body.participantName);
+    const participantName = normalizeParticipantName(stringField(body, "participantName"));
     if (!participantName) return Response.json({ error: "이름을 입력해 주세요." }, { status: 400 });
     if (participantName.length > 30) {
       return Response.json({ error: "이름은 30자 이내로 입력해 주세요." }, { status: 400 });
     }
-    if (!GENDERS.has(body.gender ?? "")) {
+    const gender = stringField(body, "gender");
+    const ageGroup = stringField(body, "ageGroup");
+    if (!GENDERS.has(gender)) {
       return Response.json({ error: "성별을 선택해 주세요." }, { status: 400 });
     }
-    if (!AGE_GROUPS.has(body.ageGroup ?? "")) {
+    if (!AGE_GROUPS.has(ageGroup)) {
       return Response.json({ error: "연령 구분을 선택해 주세요." }, { status: 400 });
     }
 
@@ -44,8 +48,8 @@ export async function POST(
         eventId: event.id,
         deviceTokenHash,
         participantName,
-        gender: body.gender,
-        ageGroup: body.ageGroup,
+        gender,
+        ageGroup,
       }).onConflictDoNothing();
       participant = await findParticipant(event.id, deviceTokenHash);
     }
@@ -58,10 +62,7 @@ export async function POST(
         "Set-Cookie": participantCookie(deviceToken, request),
       },
     });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "행사에 참가하지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("행사에 참가하지 못했습니다.");
   }
 }

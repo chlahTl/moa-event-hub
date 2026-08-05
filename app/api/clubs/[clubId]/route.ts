@@ -1,6 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../../db";
 import { clubs, events } from "../../../../db/schema";
+import { authorizeAdminRequest } from "../../../chatgpt-auth";
+import { apiError, internalApiError, isUuid, readJsonObject, stringField } from "../../../../lib/api-response";
 
 export async function GET(
   _request: Request,
@@ -8,6 +10,7 @@ export async function GET(
 ) {
   try {
     const { clubId } = await context.params;
+    if (!isUuid(clubId)) return apiError("동아리 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
     const rows = await db
@@ -28,15 +31,12 @@ export async function GET(
       })
       .from(clubs)
       .innerJoin(events, eq(clubs.eventId, events.id))
-      .where(eq(clubs.id, clubId))
+      .where(and(eq(clubs.id, clubId), isNull(events.deletedAt)))
       .limit(1);
     if (!rows.length) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
-    return Response.json({ club: rows[0] });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "동아리를 불러오지 못했습니다." },
-      { status: 500 },
-    );
+    return Response.json({ club: rows[0] }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return internalApiError("동아리를 불러오지 못했습니다.");
   }
 }
 
@@ -44,62 +44,92 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ clubId: string }> },
 ) {
+  const authorization = authorizeAdminRequest(request);
+  if (!authorization.authorized) return authorization.response;
+
   try {
     const { clubId } = await context.params;
-    const body = (await request.json()) as {
-      name?: string;
-      description?: string;
-      stampEmoji?: string;
-      stampMessage?: string;
-      submissionGuide?: string;
-      collectGender?: boolean;
-      collectAge?: boolean;
-    };
-    const name = body.name?.trim() ?? "";
-    if (!name) return Response.json({ error: "동아리명을 입력해 주세요." }, { status: 400 });
-    if (!body.collectGender && !body.collectAge) {
-      return Response.json({ error: "받을 정보를 하나 이상 선택해 주세요." }, { status: 400 });
-    }
+    if (!isUuid(clubId)) return apiError("동아리 정보 형식을 확인해 주세요.", 400);
+    const body = await readJsonObject(request);
+    if (!body) return apiError("요청 내용을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
+    const [existing] = await db.select({ club: clubs }).from(clubs)
+      .innerJoin(events, eq(clubs.eventId, events.id))
+      .where(and(eq(clubs.id, clubId), isNull(events.deletedAt))).limit(1);
+    if (!existing) return apiError("동아리를 찾을 수 없습니다.", 404);
+    const name = body.name === undefined ? existing.club.name : stringField(body, "name");
+    const description = body.description === undefined
+      ? existing.club.description
+      : stringField(body, "description");
+    const stampEmoji = body.stampEmoji === undefined
+      ? existing.club.stampEmoji
+      : stringField(body, "stampEmoji") || "⭐";
+    const stampMessage = body.stampMessage === undefined
+      ? existing.club.stampMessage
+      : stringField(body, "stampMessage");
+    const submissionGuide = body.submissionGuide === undefined
+      ? existing.club.submissionGuide
+      : stringField(body, "submissionGuide");
+    if (!name) return apiError("동아리명을 입력해 주세요.", 400);
+    if (name.length > 60) return apiError("동아리명은 60자 이내로 입력해 주세요.", 400);
+    if (description.length > 200) return apiError("동아리 설명은 200자 이내로 입력해 주세요.", 400);
+    if (stampEmoji.length > 8) return apiError("스탬프 표시는 8자 이내로 입력해 주세요.", 400);
+    if (stampMessage.length > 120) return apiError("완료 문구는 120자 이내로 입력해 주세요.", 400);
+    if (submissionGuide.length > 300) return apiError("제출 안내는 300자 이내로 입력해 주세요.", 400);
+    if ((body.collectGender !== undefined && typeof body.collectGender !== "boolean") ||
+        (body.collectAge !== undefined && typeof body.collectAge !== "boolean")) {
+      return apiError("수집 정보 설정을 확인해 주세요.", 400);
+    }
+    const collectGender = typeof body.collectGender === "boolean"
+      ? body.collectGender
+      : existing.club.collectGender;
+    const collectAge = typeof body.collectAge === "boolean"
+      ? body.collectAge
+      : existing.club.collectAge;
+    if (!collectGender && !collectAge) {
+      return apiError("받을 정보를 하나 이상 선택해 주세요.", 400);
+    }
     const [club] = await db
       .update(clubs)
       .set({
-        name: name.slice(0, 60),
-        description: body.description?.trim().slice(0, 200) ?? "",
-        stampEmoji: body.stampEmoji?.trim().slice(0, 8) || "⭐",
-        stampMessage: body.stampMessage?.trim().slice(0, 120) ?? "",
-        submissionGuide: body.submissionGuide?.trim().slice(0, 300) ?? "",
-        collectGender: body.collectGender ?? true,
-        collectAge: body.collectAge ?? true,
+        name,
+        description,
+        stampEmoji,
+        stampMessage,
+        submissionGuide,
+        collectGender,
+        collectAge,
       })
       .where(eq(clubs.id, clubId))
       .returning();
     if (!club) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
     return Response.json({ club });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "동아리를 수정하지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("동아리를 수정하지 못했습니다.");
   }
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ clubId: string }> },
 ) {
+  const authorization = authorizeAdminRequest(request);
+  if (!authorization.authorized) return authorization.response;
+
   try {
     const { clubId } = await context.params;
+    if (!isUuid(clubId)) return apiError("동아리 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
+    const [existing] = await db.select({ id: clubs.id }).from(clubs)
+      .innerJoin(events, eq(clubs.eventId, events.id))
+      .where(and(eq(clubs.id, clubId), isNull(events.deletedAt))).limit(1);
+    if (!existing) return apiError("동아리를 찾을 수 없습니다.", 404);
     const deleted = await db.delete(clubs).where(eq(clubs.id, clubId)).returning({ id: clubs.id });
     if (!deleted.length) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
     return Response.json({ deleted: true });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "동아리를 삭제하지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("동아리를 삭제하지 못했습니다.");
   }
 }

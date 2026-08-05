@@ -36,6 +36,13 @@
       "when": 1785927323598,
       "tag": "0004_funny_purifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785944606248,
+      "tag": "0005_red_maverick",
+      "breakpoints": true
     }
   ]
 }

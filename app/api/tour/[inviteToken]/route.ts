@@ -2,6 +2,7 @@ import { ensureDatabase } from "../../../../db";
 import { hashDeviceToken, readDeviceToken } from "../../../../lib/participant-session";
 import { buildTourPayload, findEventByInviteToken, findParticipant } from "../../../../lib/tour-data";
 import { getEventAvailability } from "../../../../lib/tour";
+import { internalApiError } from "../../../../lib/api-response";
 
 export async function GET(
   request: Request,
@@ -22,10 +23,7 @@ export async function GET(
     return Response.json(await buildTourPayload(event, participant), {
       headers: { "Cache-Control": "no-store" },
     });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "행사 참여 화면을 불러오지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("행사 참여 화면을 불러오지 못했습니다.");
   }
 }

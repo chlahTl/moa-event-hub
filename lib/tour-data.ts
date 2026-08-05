@@ -1,10 +1,11 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { clubStampRecords, clubs, events, participants, stampPoints, stampRecords } from "../db/schema";
 
 export async function findEventByInviteToken(inviteToken: string) {
   const db = getDb();
-  const [event] = await db.select().from(events).where(eq(events.inviteToken, inviteToken)).limit(1);
+  const [event] = await db.select().from(events)
+    .where(and(eq(events.inviteToken, inviteToken), isNull(events.deletedAt))).limit(1);
   return event ?? null;
 }
 
@@ -70,7 +71,6 @@ export async function buildTourPayload(
         }
       : null,
     clubs: eventClubs.map((club) => ({
-      id: club.id,
       name: club.name,
       description: club.description,
       stampEmoji: club.stampEmoji,

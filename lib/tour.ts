@@ -6,6 +6,7 @@ type EventWindow = {
   eventDate: string;
   startDate: string | null;
   endDate: string | null;
+  deletedAt?: string | null;
 };
 
 export function normalizeParticipantName(value?: string) {
@@ -13,6 +14,9 @@ export function normalizeParticipantName(value?: string) {
 }
 
 export function getEventAvailability(event: EventWindow) {
+  if (event.deletedAt) {
+    return { available: false, message: "더 이상 참여할 수 없는 행사입니다." };
+  }
   if (event.status !== "active") {
     return { available: false, message: "현재 운영 중인 행사가 아닙니다." };
   }

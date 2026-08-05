@@ -4,7 +4,7 @@ import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Point = { id: string; name: string; description: string; visited: boolean; visitedAt: string | null };
-type ClubPoint = Point & { stampEmoji: string; stampMessage: string; submissionGuide: string };
+type ClubPoint = Omit<Point, "id"> & { stampEmoji: string; stampMessage: string; submissionGuide: string };
 type ClaimTarget = { pointToken?: string; clubId?: string };
 type TourData = {
   event: {
@@ -271,7 +271,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
         {tour.clubs.length ? (
           <div className="tour-point-grid">
             {tour.clubs.map((club, index) => (
-              <article className={club.visited ? "tour-point visited" : "tour-point"} key={club.id}>
+              <article className={club.visited ? "tour-point visited" : "tour-point"} key={`${club.name}-${index}`}>
                 <div className="stamp-medal">{club.visited ? club.stampEmoji || "⭐" : String(index + 1).padStart(2, "0")}</div>
                 <div><span>{club.visited ? "참여 완료" : "아직 참여 전"}</span><h3>{club.name}</h3><p>{club.visited && club.submissionGuide ? club.submissionGuide : club.description || "동아리 QR을 스캔해 참여해 주세요."}</p></div>
               </article>

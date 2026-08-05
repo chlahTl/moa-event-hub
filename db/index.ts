@@ -27,6 +27,19 @@ export async function ensureDatabase() {
       location TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'active',
       invite_token TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT,
+      deleted_by TEXT
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
+      id TEXT PRIMARY KEY NOT NULL,
+      event_id TEXT,
+      event_name TEXT NOT NULL DEFAULT '',
+      action TEXT NOT NULL,
+      actor_user_id TEXT NOT NULL,
+      actor_email TEXT NOT NULL,
+      details TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS clubs (
@@ -117,6 +130,12 @@ export async function ensureDatabase() {
     env.DB.prepare(
       "CREATE INDEX IF NOT EXISTS idx_club_stamp_records_event_participant ON club_stamp_records(event_id, participant_id)",
     ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_event_created ON admin_audit_logs(event_id, created_at)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_actor_created ON admin_audit_logs(actor_email, created_at)",
+    ),
   ]);
 
   const eventColumns = await env.DB.prepare("PRAGMA table_info(events)").all<{
@@ -128,10 +147,19 @@ export async function ensureDatabase() {
     ["start_date", "ALTER TABLE events ADD COLUMN start_date TEXT"],
     ["end_date", "ALTER TABLE events ADD COLUMN end_date TEXT"],
     ["invite_token", "ALTER TABLE events ADD COLUMN invite_token TEXT"],
+    ["updated_at", "ALTER TABLE events ADD COLUMN updated_at TEXT"],
+    ["deleted_at", "ALTER TABLE events ADD COLUMN deleted_at TEXT"],
+    ["deleted_by", "ALTER TABLE events ADD COLUMN deleted_by TEXT"],
   ] as const;
   for (const [column, statement] of missingEventColumns) {
     if (!eventColumnNames.has(column)) await env.DB.prepare(statement).run();
   }
+  await env.DB.prepare(
+    "UPDATE events SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_events_deleted_event_date ON events(deleted_at, event_date)",
+  ).run();
 
   const clubColumns = await env.DB.prepare("PRAGMA table_info(clubs)").all<{
     name: string;
@@ -166,4 +194,6 @@ export async function ensureDatabase() {
       "ALTER TABLE responses ADD COLUMN participant_name TEXT NOT NULL DEFAULT ''",
     ).run();
   }
+
+  await env.DB.prepare("PRAGMA optimize").run();
 }

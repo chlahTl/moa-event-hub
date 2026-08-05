@@ -1,15 +1,17 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../../db";
 import { clubStampRecords, clubs, events, participants, responses, stampPoints, stampRecords } from "../../../../db/schema";
 import { hashDeviceToken, readDeviceToken } from "../../../../lib/participant-session";
 import { buildTourPayload, findParticipant } from "../../../../lib/tour-data";
 import { getEventAvailability } from "../../../../lib/tour";
+import { apiError, internalApiError, readJsonObject, stringField } from "../../../../lib/api-response";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { pointToken?: string; clubId?: string };
-    const pointToken = body.pointToken?.trim() ?? "";
-    const clubId = body.clubId?.trim() ?? "";
+    const body = await readJsonObject(request);
+    if (!body) return apiError("요청 내용을 확인해 주세요.", 400);
+    const pointToken = stringField(body, "pointToken");
+    const clubId = stringField(body, "clubId");
     if (!pointToken && !clubId) {
       return Response.json({ error: "동아리 또는 추가 지점 QR 정보가 없습니다." }, { status: 400 });
     }
@@ -21,13 +23,13 @@ export async function POST(request: Request) {
           .select({ club: clubs, event: events })
           .from(clubs)
           .innerJoin(events, eq(clubs.eventId, events.id))
-          .where(eq(clubs.id, clubId))
+          .where(and(eq(clubs.id, clubId), isNull(events.deletedAt)))
           .limit(1)
       : await db
           .select({ point: stampPoints, event: events })
           .from(stampPoints)
           .innerJoin(events, eq(stampPoints.eventId, events.id))
-          .where(eq(stampPoints.token, pointToken))
+          .where(and(eq(stampPoints.token, pointToken), isNull(events.deletedAt)))
           .limit(1);
 
     if (!target) {
@@ -85,7 +87,6 @@ export async function POST(request: Request) {
         )),
         duplicate,
         stampedClub: {
-          id: targetClub.id,
           name: targetClub.name,
           stampEmoji: targetClub.stampEmoji,
           submissionGuide: targetClub.submissionGuide,
@@ -117,10 +118,7 @@ export async function POST(request: Request) {
       duplicate: Boolean(existing),
       stampedPoint: { id: targetPoint.id, name: targetPoint.name },
     });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "스탬프를 등록하지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("스탬프를 등록하지 못했습니다.");
   }
 }

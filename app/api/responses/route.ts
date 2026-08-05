@@ -1,22 +1,20 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { clubs, responses } from "../../../db/schema";
+import { clubs, events, responses } from "../../../db/schema";
+import { apiError, internalApiError, readJsonObject, stringField } from "../../../lib/api-response";
+import { getEventAvailability } from "../../../lib/tour";
 
 const GENDERS = new Set(["여성", "남성", "응답하지 않음"]);
 const AGE_GROUPS = new Set(["유아", "초등", "중등", "고등", "청년", "후기"]);
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      clubId?: string;
-      participantName?: string;
-      gender?: string;
-      ageGroup?: string;
-    };
-    const clubId = body.clubId?.trim() ?? "";
+    const body = await readJsonObject(request);
+    if (!body) return apiError("요청 내용을 확인해 주세요.", 400);
+    const clubId = stringField(body, "clubId");
     if (!clubId) return Response.json({ error: "동아리 정보가 없습니다." }, { status: 400 });
 
-    const participantName = body.participantName?.normalize("NFKC").trim().replace(/\s+/g, " ") ?? "";
+    const participantName = stringField(body, "participantName").replace(/\s+/g, " ");
     if (!participantName) {
       return Response.json({ error: "이름을 입력해 주세요." }, { status: 400 });
     }
@@ -26,13 +24,20 @@ export async function POST(request: Request) {
 
     await ensureDatabase();
     const db = getDb();
-    const [club] = await db.select().from(clubs).where(eq(clubs.id, clubId)).limit(1);
-    if (!club) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
+    const [target] = await db.select({ club: clubs, event: events }).from(clubs)
+      .innerJoin(events, eq(clubs.eventId, events.id))
+      .where(and(eq(clubs.id, clubId), isNull(events.deletedAt))).limit(1);
+    if (!target) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
+    const { club, event } = target;
+    const availability = getEventAvailability(event);
+    if (!availability.available) return Response.json({ error: availability.message }, { status: 410 });
 
-    if (club.collectGender && !GENDERS.has(body.gender ?? "")) {
+    const gender = stringField(body, "gender");
+    const ageGroup = stringField(body, "ageGroup");
+    if (club.collectGender && !GENDERS.has(gender)) {
       return Response.json({ error: "성별을 선택해 주세요." }, { status: 400 });
     }
-    if (club.collectAge && !AGE_GROUPS.has(body.ageGroup ?? "")) {
+    if (club.collectAge && !AGE_GROUPS.has(ageGroup)) {
       return Response.json({ error: "연령 구분을 선택해 주세요." }, { status: 400 });
     }
 
@@ -42,14 +47,11 @@ export async function POST(request: Request) {
       eventId: club.eventId,
       clubId,
       participantName,
-      gender: club.collectGender ? body.gender : null,
-      ageGroup: club.collectAge ? body.ageGroup : null,
+      gender: club.collectGender ? gender : null,
+      ageGroup: club.collectAge ? ageGroup : null,
     });
     return Response.json({ response: { id } }, { status: 201 });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "응답을 저장하지 못했습니다." },
-      { status: 500 },
-    );
+  } catch {
+    return internalApiError("응답을 저장하지 못했습니다.");
   }
 }

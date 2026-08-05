@@ -1,13 +1,21 @@
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { clubs, responses } from "../../../db/schema";
+import { clubs, events, responses } from "../../../db/schema";
+import { authorizeAdminRequest } from "../../chatgpt-auth";
+import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
 export async function GET(request: Request) {
+  const authorization = authorizeAdminRequest(request);
+  if (!authorization.authorized) return authorization.response;
+
   try {
-    const eventId = new URL(request.url).searchParams.get("eventId");
-    if (!eventId) return Response.json({ error: "eventId가 필요합니다." }, { status: 400 });
+    const eventId = new URL(request.url).searchParams.get("eventId")?.trim() ?? "";
+    if (!isUuid(eventId)) return apiError("행사 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
+    const [event] = await db.select({ id: events.id }).from(events)
+      .where(and(eq(events.id, eventId), isNull(events.deletedAt))).limit(1);
+    if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
     const [gender, age, recent] = await Promise.all([
       db
         .select({ label: responses.gender, total: count() })
@@ -38,11 +46,8 @@ export async function GET(request: Request) {
       gender: gender.filter((item) => item.label).map((item) => ({ ...item, total: Number(item.total) })),
       age: age.filter((item) => item.label).map((item) => ({ ...item, total: Number(item.total) })),
       recent,
-    });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "통계를 불러오지 못했습니다." },
-      { status: 500 },
-    );
+    }, { headers: { "Cache-Control": "no-store, private" } });
+  } catch {
+    return internalApiError("통계를 불러오지 못했습니다.");
   }
 }
