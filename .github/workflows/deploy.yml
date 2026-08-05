@@ -72,6 +72,7 @@ jobs:
           const path = "dist/server/wrangler.json";
           const config = JSON.parse(fs.readFileSync(path, "utf8"));
 
+          delete config.legacy_env;
           config.name = "moa-event-hub";
           config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID;
           config.d1_databases = [{
