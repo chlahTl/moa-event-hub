@@ -46,10 +46,12 @@ jobs:
           ')"
 
           if [ -z "$database_id" ]; then
-            created_database="$(npx wrangler@latest d1 create moa-event-hub-db --location apac --json)"
-            database_id="$(CREATED_DB_JSON="$created_database" node -e '
-              const row = JSON.parse(process.env.CREATED_DB_JSON || "{}");
-              process.stdout.write(row.uuid || row.database_id || "");
+            npx wrangler@latest d1 create moa-event-hub-db --location apac
+            database_list="$(npx wrangler@latest d1 list --json)"
+            database_id="$(DB_LIST_JSON="$database_list" node -e '
+              const rows = JSON.parse(process.env.DB_LIST_JSON || "[]");
+              const match = rows.find((row) => row.name === "moa-event-hub-db");
+              process.stdout.write(match?.uuid || match?.database_id || "");
             ')"
           fi
 
