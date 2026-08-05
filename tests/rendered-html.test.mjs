@@ -111,7 +111,7 @@ test("club operations support custom guidance, safe offline retry, editing and e
     readFile(new URL("../app/api/stamps/claim/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/join/[inviteToken]/ResilientClubTour.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/join/[inviteToken]/OfflineReadyClubTour.tsx", import.meta.url), "utf8"),
     readFile(new URL("../public/sw.js", import.meta.url), "utf8"),
     readFile(new URL("../app/ServiceWorkerRegistration.tsx", import.meta.url), "utf8"),
   ]);
@@ -139,7 +139,7 @@ test("stamp APIs keep identity server-side and validate event ownership", async 
     readFile(new URL("../app/api/tour/[inviteToken]/join/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/stamps/claim/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/join/[inviteToken]/ResilientClubTour.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/join/[inviteToken]/OfflineReadyClubTour.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/visit/[clubId]/GuidedClubVisit.tsx", import.meta.url), "utf8"),
   ]);
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "moa-shell-v1";
+const CACHE_NAME = "moa-shell-v2";
 const STATIC_PATHS = ["/", "/admin"];
 
 self.addEventListener("install", (event) => {

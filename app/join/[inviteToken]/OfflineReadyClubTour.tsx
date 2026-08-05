@@ -1,6 +1,6 @@
 "use client";
 
-import type { IScannerControls } from "@zxing/browser";
+import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Point = { id: string; name: string; description: string; visited: boolean; visitedAt: string | null };
@@ -198,7 +198,6 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("이 브라우저에서는 카메라 스캔을 지원하지 않습니다.");
       }
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
       const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 180 });
       if (!videoRef.current) throw new Error("카메라 화면을 준비하지 못했습니다.");
       const controls = await reader.decodeFromConstraints(
