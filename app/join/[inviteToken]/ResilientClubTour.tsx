@@ -4,6 +4,8 @@ import type { IScannerControls } from "@zxing/browser";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Point = { id: string; name: string; description: string; visited: boolean; visitedAt: string | null };
+type ClubPoint = Point & { stampEmoji: string; stampMessage: string; submissionGuide: string };
+type ClaimTarget = { pointToken?: string; clubId?: string };
 type TourData = {
   event: {
     id: string;
@@ -16,7 +18,7 @@ type TourData = {
     inviteToken: string;
   };
   participant: { id: string; name: string; gender: string | null; ageGroup: string | null } | null;
-  clubs: Point[];
+  clubs: ClubPoint[];
   extraPoints: Point[];
   progress: { completed: number; total: number; percent: number };
   extraProgress: { completed: number; total: number; percent: number };
@@ -40,10 +42,13 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerStatus, setScannerStatus] = useState("");
   const [claiming, setClaiming] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const scanLocked = useRef(false);
   const scannerSession = useRef(0);
+  const pendingKey = `moa-pending-stamps:${inviteToken}`;
 
   const loadTour = useCallback(async () => {
     const response = await fetch(`/api/tour/${encodeURIComponent(inviteToken)}`, { cache: "no-store" });
@@ -57,6 +62,68 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
       .catch((caught) => setError(caught instanceof Error ? caught.message : "행사를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, [loadTour]);
+
+  const readPending = useCallback((): ClaimTarget[] => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(pendingKey) || "[]");
+      return Array.isArray(parsed) ? parsed.filter((item) => item && (item.clubId || item.pointToken)) : [];
+    } catch {
+      return [];
+    }
+  }, [pendingKey]);
+
+  const writePending = useCallback((items: ClaimTarget[]) => {
+    localStorage.setItem(pendingKey, JSON.stringify(items));
+    setPendingCount(items.length);
+  }, [pendingKey]);
+
+  const queuePending = useCallback((target: ClaimTarget) => {
+    const items = readPending();
+    const identity = JSON.stringify(target);
+    if (!items.some((item) => JSON.stringify(item) === identity)) items.push(target);
+    writePending(items);
+  }, [readPending, writePending]);
+
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    setPendingCount(readPending().length);
+    let flushing = false;
+    async function flushPending() {
+      if (flushing || !navigator.onLine) return;
+      flushing = true;
+      const remaining: ClaimTarget[] = [];
+      for (const target of readPending()) {
+        try {
+          const response = await fetch("/api/stamps/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(target),
+          });
+          setOnline(true);
+          const data = await response.json();
+          if (response.ok) setTour(data);
+          else if (response.status >= 500) remaining.push(target);
+          else setError(data.error || "보관된 스탬프 QR을 확인하지 못했습니다.");
+        } catch {
+          remaining.push(target);
+          setOnline(false);
+        }
+      }
+      writePending(remaining);
+      flushing = false;
+    }
+    const handleOnline = () => { setOnline(true); void flushPending(); };
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    const retryTimer = window.setInterval(() => void flushPending(), 15000);
+    void flushPending();
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.clearInterval(retryTimer);
+    };
+  }, [readPending, writePending]);
 
   const stopScanner = useCallback(() => {
     controlsRef.current?.stop();
@@ -77,19 +144,31 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
 
   useEffect(() => () => stopScanner(), [stopScanner]);
 
-  async function claimStamp(target: { pointToken?: string; clubId?: string }) {
+  async function claimStamp(target: ClaimTarget) {
     setClaiming(true);
     setError("");
-    const response = await fetch("/api/stamps/claim", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(target),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "스탬프를 등록하지 못했습니다.");
-    setTour(data);
-    closeScanner();
-    setClaiming(false);
+    try {
+      const response = await fetch("/api/stamps/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(target),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "스탬프를 등록하지 못했습니다.");
+      setTour(data);
+      closeScanner();
+    } catch (caught) {
+      if (!navigator.onLine || caught instanceof TypeError) {
+        queuePending(target);
+        setOnline(false);
+        setError("연결이 끊겨 QR을 안전하게 보관했어요. 인터넷이 돌아오면 자동 등록합니다.");
+        closeScanner();
+        return;
+      }
+      throw caught;
+    } finally {
+      setClaiming(false);
+    }
   }
 
   async function handleScannedText(text: string) {
@@ -176,6 +255,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
       </section>
 
       {tour.successMessage && <div className="stamp-success" role="status"><span>✓</span>{tour.successMessage}</div>}
+      {(!online || pendingCount > 0) && <div className="offline-banner" role="status"><span>↻</span><div><strong>{online ? "보관된 스탬프를 등록하고 있어요." : "현재 오프라인입니다."}</strong><p>{pendingCount ? `${pendingCount}개 QR을 보관 중이며 연결 복구 후 자동 등록됩니다.` : "화면은 계속 사용할 수 있고, 스캔한 QR은 연결 복구 후 등록됩니다."}</p></div></div>}
       {error && <div className="tour-error" role="alert">{error}</div>}
 
       <section className="tour-progress-card">
@@ -193,8 +273,8 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
           <div className="tour-point-grid">
             {tour.clubs.map((club, index) => (
               <article className={club.visited ? "tour-point visited" : "tour-point"} key={club.id}>
-                <div className="stamp-medal">{club.visited ? "✓" : String(index + 1).padStart(2, "0")}</div>
-                <div><span>{club.visited ? "참여 완료" : "아직 참여 전"}</span><h3>{club.name}</h3><p>{club.description || "동아리 QR을 스캔해 참여해 주세요."}</p></div>
+                <div className="stamp-medal">{club.visited ? club.stampEmoji || "⭐" : String(index + 1).padStart(2, "0")}</div>
+                <div><span>{club.visited ? "참여 완료" : "아직 참여 전"}</span><h3>{club.name}</h3><p>{club.visited && club.submissionGuide ? club.submissionGuide : club.description || "동아리 QR을 스캔해 참여해 주세요."}</p></div>
               </article>
             ))}
           </div>
@@ -244,18 +324,21 @@ function JoinForm({ inviteToken, event, onJoined }: { inviteToken: string; event
     if (!canSubmit) return;
     setSubmitting(true);
     setError("");
-    const response = await fetch(`/api/tour/${encodeURIComponent(inviteToken)}/join`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ participantName, gender, ageGroup }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setError(data.error || "참가 등록을 완료하지 못했습니다.");
+    try {
+      const response = await fetch(`/api/tour/${encodeURIComponent(inviteToken)}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantName, gender, ageGroup }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "참가 등록을 완료하지 못했습니다.");
+      onJoined(data);
+    } catch (caught) {
+      setError(caught instanceof TypeError
+        ? "현재 서버에 연결할 수 없어요. 입력 내용은 화면에 그대로 있으니 잠시 후 다시 눌러 주세요."
+        : caught instanceof Error ? caught.message : "참가 등록을 완료하지 못했습니다.");
       setSubmitting(false);
-      return;
     }
-    onJoined(data);
   }
 
   return (

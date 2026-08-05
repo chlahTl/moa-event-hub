@@ -8,6 +8,9 @@ export async function POST(request: Request) {
       eventId?: string;
       name?: string;
       description?: string;
+      stampEmoji?: string;
+      stampMessage?: string;
+      submissionGuide?: string;
       collectGender?: boolean;
       collectAge?: boolean;
     };
@@ -32,6 +35,9 @@ export async function POST(request: Request) {
         eventId,
         name,
         description: body.description?.trim() ?? "",
+        stampEmoji: normalizeStampEmoji(body.stampEmoji),
+        stampMessage: body.stampMessage?.trim().slice(0, 120) ?? "",
+        submissionGuide: body.submissionGuide?.trim().slice(0, 300) ?? "",
         collectGender: body.collectGender ?? true,
         collectAge: body.collectAge ?? true,
       })
@@ -43,4 +49,8 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function normalizeStampEmoji(value?: string) {
+  return value?.trim().slice(0, 8) || "⭐";
 }

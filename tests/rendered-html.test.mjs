@@ -39,7 +39,7 @@ test("server-renders the Moa landing page", async () => {
 test("uses native navigation links that work in the vinext client", async () => {
   const [landing, dashboard] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/admin/ClubStampDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(landing, /next\/link/);
@@ -49,11 +49,11 @@ test("uses native navigation links that work in the vinext client", async () => 
 
 test("keeps participant names and club responses connected", async () => {
   const [visitForm, responseRoute, schema, exportRoute, dashboard] = await Promise.all([
-    readFile(new URL("../app/visit/[clubId]/ClubVisitForm.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/visit/[clubId]/GuidedClubVisit.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/responses/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/admin/ClubStampDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(visitForm, /name="participantName"/);
@@ -69,7 +69,7 @@ test("keeps participant names and club responses connected", async () => {
 test("stamp tour schema prevents duplicate participants and stamps", async () => {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON");
-  for (const migrationName of ["0000_eager_blockbuster.sql", "0001_dizzy_kulan_gath.sql", "0002_warm_tomas.sql", "0003_condemned_robbie_robertson.sql"]) {
+  for (const migrationName of ["0000_eager_blockbuster.sql", "0001_dizzy_kulan_gath.sql", "0002_warm_tomas.sql", "0003_condemned_robbie_robertson.sql", "0004_funny_purifiers.sql"]) {
     const migration = await readFile(new URL(`../drizzle/${migrationName}`, import.meta.url), "utf8");
     for (const statement of migration.split("--> statement-breakpoint").map((part) => part.trim()).filter(Boolean)) {
       database.exec(statement);
@@ -84,6 +84,10 @@ test("stamp tour schema prevents duplicate participants and stamps", async () =>
   );
 
   database.prepare("INSERT INTO clubs (id, event_id, name) VALUES (?, ?, ?)").run("club-1", "event-1", "찬양팀");
+  const clubSettings = database.prepare("SELECT stamp_emoji, stamp_message, submission_guide FROM clubs WHERE id = ?").get("club-1");
+  assert.equal(clubSettings.stamp_emoji, "⭐");
+  assert.equal(clubSettings.stamp_message, "");
+  assert.equal(clubSettings.submission_guide, "");
   database.prepare("INSERT INTO club_stamp_records (id, event_id, participant_id, club_id) VALUES (?, ?, ?, ?)").run("club-record-1", "event-1", "person-1", "club-1");
   assert.throws(
     () => database.prepare("INSERT INTO club_stamp_records (id, event_id, participant_id, club_id) VALUES (?, ?, ?, ?)").run("club-record-2", "event-1", "person-1", "club-1"),
@@ -99,14 +103,44 @@ test("stamp tour schema prevents duplicate participants and stamps", async () =>
   database.close();
 });
 
+test("club operations support custom guidance, safe offline retry, editing and exports", async () => {
+  const [schema, clubRoute, clubDetailRoute, claimRoute, exportRoute, dashboard, scanner, serviceWorker, registration] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/clubs/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/clubs/[clubId]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/stamps/claim/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/join/[inviteToken]/ResilientClubTour.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../public/sw.js", import.meta.url), "utf8"),
+    readFile(new URL("../app/ServiceWorkerRegistration.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(schema, /stampEmoji: text\("stamp_emoji"\)/);
+  assert.match(clubRoute, /submissionGuide/);
+  assert.match(clubDetailRoute, /export async function PATCH/);
+  assert.match(clubDetailRoute, /export async function DELETE/);
+  assert.match(claimRoute, /targetClub\.stampMessage/);
+  assert.match(exportRoute, /searchParams\.get\("clubId"\)/);
+  assert.match(exportRoute, /eq\(responses\.clubId, clubId\)/);
+  assert.match(dashboard, /요건·제출 안내/);
+  assert.match(dashboard, /실적 CSV/);
+  assert.match(dashboard, /window\.confirm/);
+  assert.match(scanner, /moa-pending-stamps/);
+  assert.match(scanner, /인터넷이 돌아오면 자동 등록/);
+  assert.doesNotMatch(scanner, /localStorage[\s\S]{0,120}participantName/);
+  assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(registration, /serviceWorker\.register\("\/sw\.js"\)/);
+});
+
 test("stamp APIs keep identity server-side and validate event ownership", async () => {
   const [session, joinRoute, claimRoute, dashboard, scanner, clubVisit] = await Promise.all([
     readFile(new URL("../lib/participant-session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/tour/[inviteToken]/join/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/stamps/claim/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/admin/ClubStampDashboard.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/join/[inviteToken]/ClubStampTour.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/visit/[clubId]/ClubVisitForm.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/join/[inviteToken]/ResilientClubTour.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/visit/[clubId]/GuidedClubVisit.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(session, /HttpOnly/);

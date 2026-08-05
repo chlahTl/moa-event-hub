@@ -1,4 +1,4 @@
-import AdminDashboard from "./ClubStampDashboard";
+import AdminDashboard from "./EventOperationsDashboard";
 
 export default function AdminPage() {
   return <AdminDashboard />;

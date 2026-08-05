@@ -81,10 +81,15 @@ export async function POST(request: Request) {
         ...(await buildTourPayload(
           target.event,
           participant,
-          duplicate ? "이미 참여한 동아리예요." : `${targetClub.name} 참여 스탬프를 받았어요!`,
+          duplicate ? "이미 참여한 동아리예요." : targetClub.stampMessage || `${targetClub.name} 참여 스탬프를 받았어요!`,
         )),
         duplicate,
-        stampedClub: { id: targetClub.id, name: targetClub.name },
+        stampedClub: {
+          id: targetClub.id,
+          name: targetClub.name,
+          stampEmoji: targetClub.stampEmoji,
+          submissionGuide: targetClub.submissionGuide,
+        },
       });
     }
 

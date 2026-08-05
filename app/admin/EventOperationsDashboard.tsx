@@ -8,6 +8,9 @@ type Club = {
   eventId: string;
   name: string;
   description: string;
+  stampEmoji: string;
+  stampMessage: string;
+  submissionGuide: string;
   collectGender: boolean;
   collectAge: boolean;
   responseCount: number;
@@ -59,7 +62,8 @@ export default function AdminDashboard() {
   const [selectedId, setSelectedId] = useState("");
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<"event" | "club" | "stampPoint" | "qr" | null>(null);
+  const [modal, setModal] = useState<"event" | "club" | "editClub" | "stampPoint" | "qr" | null>(null);
+  const [editingClub, setEditingClub] = useState<Club | null>(null);
   const [shareQr, setShareQr] = useState<ShareQr | null>(null);
   const [qrData, setQrData] = useState("");
   const [toast, setToast] = useState("");
@@ -138,6 +142,9 @@ export default function AdminDashboard() {
         eventId: selected.id,
         name: form.get("name"),
         description: form.get("description"),
+        stampEmoji: form.get("stampEmoji"),
+        stampMessage: form.get("stampMessage"),
+        submissionGuide: form.get("submissionGuide"),
         collectGender: form.get("collectGender") === "on",
         collectAge: form.get("collectAge") === "on",
       }),
@@ -147,6 +154,50 @@ export default function AdminDashboard() {
     setModal(null);
     await loadEvents(selected.id);
     notify("동아리와 전용 QR을 만들었습니다.");
+  }
+
+  async function updateClub(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !editingClub) return;
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const response = await fetch(`/api/clubs/${encodeURIComponent(editingClub.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.get("name"),
+        description: form.get("description"),
+        stampEmoji: form.get("stampEmoji"),
+        stampMessage: form.get("stampMessage"),
+        submissionGuide: form.get("submissionGuide"),
+        collectGender: form.get("collectGender") === "on",
+        collectAge: form.get("collectAge") === "on",
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) return setError(data.error);
+    setModal(null);
+    setEditingClub(null);
+    await loadEvents(selected.id);
+    notify("동아리와 스탬프 안내를 수정했습니다.");
+  }
+
+  async function deleteClub(club: Club) {
+    if (!selected) return;
+    const confirmed = window.confirm(`“${club.name}” 동아리를 삭제할까요?\n참여 실적과 스탬프 기록도 함께 삭제되며 복구할 수 없습니다.`);
+    if (!confirmed) return;
+    setError("");
+    const response = await fetch(`/api/clubs/${encodeURIComponent(club.id)}`, { method: "DELETE" });
+    const data = await response.json();
+    if (!response.ok) return setError(data.error || "동아리를 삭제하지 못했습니다.");
+    await loadEvents(selected.id);
+    notify("동아리와 관련 기록을 삭제했습니다.");
+  }
+
+  function openClubEdit(club: Club) {
+    setError("");
+    setEditingClub(club);
+    setModal("editClub");
   }
 
   async function createStampPoint(event: FormEvent<HTMLFormElement>) {
@@ -285,7 +336,7 @@ export default function AdminDashboard() {
                   <div className="club-grid">
                     {selected.clubs.map((club, index) => (
                       <article className="club-card" key={club.id}>
-                        <div className="club-card-top"><span>{String(index + 1).padStart(2, "0")}</span><button onClick={() => openClubQr(club)} aria-label={`${club.name} QR 보기`}>⌗</button></div>
+                        <div className="club-card-top"><span>{club.stampEmoji || String(index + 1).padStart(2, "0")}</span><button onClick={() => openClubQr(club)} aria-label={`${club.name} QR 보기`}>⌗</button></div>
                         <h3>{club.name}</h3>
                         <p>{club.description || "동아리 전용 참여 입력"}</p>
                         <div className="field-tags">
@@ -294,6 +345,11 @@ export default function AdminDashboard() {
                           {club.collectAge && <span>연령 구분</span>}
                         </div>
                         <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button onClick={() => openClubQr(club)}>기본 스탬프 QR →</button></div>
+                        <div className="club-manage-actions">
+                          <button onClick={() => openClubEdit(club)}>수정</button>
+                          <a href={`/api/export?eventId=${selected.id}&clubId=${club.id}`}>실적 CSV ↓</a>
+                          <button className="danger" onClick={() => void deleteClub(club)}>삭제</button>
+                        </div>
                       </article>
                     ))}
                   </div>
@@ -338,7 +394,7 @@ export default function AdminDashboard() {
               </div>
 
               <section className="panel response-panel">
-                <div className="panel-heading"><div><p>최근 활동</p><h2>최근 응답</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 내려받기 ↓</a></div>
+                <div className="panel-heading"><div><p>최근 활동</p><h2>최근 응답</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
                 <RecentTable items={stats.recent} />
               </section>
 
@@ -354,6 +410,7 @@ export default function AdminDashboard() {
 
       {modal === "event" && <EventModal onClose={() => setModal(null)} onSubmit={createEvent} />}
       {modal === "club" && selected && <ClubModal eventName={selected.name} onClose={() => setModal(null)} onSubmit={createClub} />}
+      {modal === "editClub" && selected && editingClub && <ClubModal eventName={selected.name} club={editingClub} onClose={() => { setModal(null); setEditingClub(null); }} onSubmit={updateClub} />}
       {modal === "stampPoint" && selected && <StampPointModal eventName={selected.name} onClose={() => setModal(null)} onSubmit={createStampPoint} />}
       {modal === "qr" && shareQr && <QrModal qr={shareQr} data={qrData} onClose={() => setModal(null)} onNotify={notify} />}
       {toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}
@@ -412,8 +469,9 @@ function EventModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (eve
   return <ModalShell title="새 행사 만들기" kicker="STEP 01 · EVENT" onClose={onClose}><p className="modal-intro">기본 정보를 입력하면 참가자 초대 QR이 자동으로 만들어집니다.</p><form className="modal-form" onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus placeholder="예: 2026 여름 공동체 주간" /></label><label>행사 설명 <small>선택</small><textarea name="description" rows={3} placeholder="참가자 화면에 보여줄 짧은 소개" /></label><div className="form-row"><label>시작일<input name="startDate" type="date" defaultValue={today} required /></label><label>종료일<input name="endDate" type="date" defaultValue={today} required /></label></div><div className="form-row"><label>기관명<input name="institution" defaultValue="NCHM" /></label><label>장소<input name="location" placeholder="예: 본관 1층" /></label></div><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">행사와 초대 QR 만들기 →</button></div></form></ModalShell>;
 }
 
-function ClubModal({ eventName, onClose, onSubmit }: { eventName: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <ModalShell title="동아리 스탬프 추가" kicker="STEP 02 · PRIMARY STAMP" onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 기본 스탬프가 될 동아리와 QR을 만듭니다. 행사 참가자는 이 QR을 스캔하면 이름을 다시 입력하지 않습니다.</p><form className="modal-form" onSubmit={onSubmit}><label>동아리명<input name="name" required autoFocus placeholder="예: 청년 찬양팀" /></label><label>안내 문구 <small>선택</small><input name="description" placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><fieldset><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">동아리 스탬프 QR 만들기 →</button></div></form></ModalShell>;
+function ClubModal({ eventName, club, onClose, onSubmit }: { eventName: string; club?: Club; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const editing = Boolean(club);
+  return <ModalShell title={editing ? "동아리 수정" : "동아리 스탬프 추가"} kicker={editing ? "CLUB · EDIT" : "STEP 02 · PRIMARY STAMP"} onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 동아리 정보와 QR 스캔 후 보여줄 안내를 설정합니다.</p><form className="modal-form" onSubmit={onSubmit}><div className="form-row club-name-row"><label>동아리명<input name="name" required autoFocus maxLength={60} defaultValue={club?.name} placeholder="예: 청년 찬양팀" /></label><label>도장 모양<input name="stampEmoji" maxLength={8} defaultValue={club?.stampEmoji || "⭐"} placeholder="⭐" /></label></div><label>동아리 소개 <small>참여 전 표시</small><input name="description" maxLength={200} defaultValue={club?.description} placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><label>스탬프 완료 멘트 <small>선택</small><input name="stampMessage" maxLength={120} defaultValue={club?.stampMessage} placeholder="예: 미션 성공! 선생님께 화면을 보여 주세요." /></label><label>요건·제출 안내 <small>선택</small><textarea name="submissionGuide" rows={3} maxLength={300} defaultValue={club?.submissionGuide} placeholder="예: 활동지 작성 후 본관 1층 안내 부스로 보내 주세요." /></label><fieldset><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked={club?.collectGender ?? true} /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked={club?.collectAge ?? true} /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">{editing ? "수정 내용 저장 →" : "동아리 스탬프 QR 만들기 →"}</button></div></form></ModalShell>;
 }
 
 function StampPointModal({ eventName, onClose, onSubmit }: { eventName: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

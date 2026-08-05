@@ -34,6 +34,9 @@ export async function ensureDatabase() {
       event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
+      stamp_emoji TEXT NOT NULL DEFAULT '⭐',
+      stamp_message TEXT NOT NULL DEFAULT '',
+      submission_guide TEXT NOT NULL DEFAULT '',
       collect_gender INTEGER NOT NULL DEFAULT 1,
       collect_age INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -128,6 +131,19 @@ export async function ensureDatabase() {
   ] as const;
   for (const [column, statement] of missingEventColumns) {
     if (!eventColumnNames.has(column)) await env.DB.prepare(statement).run();
+  }
+
+  const clubColumns = await env.DB.prepare("PRAGMA table_info(clubs)").all<{
+    name: string;
+  }>();
+  const clubColumnNames = new Set(clubColumns.results.map((column) => column.name));
+  const missingClubColumns = [
+    ["stamp_emoji", "ALTER TABLE clubs ADD COLUMN stamp_emoji TEXT NOT NULL DEFAULT '⭐'"],
+    ["stamp_message", "ALTER TABLE clubs ADD COLUMN stamp_message TEXT NOT NULL DEFAULT ''"],
+    ["submission_guide", "ALTER TABLE clubs ADD COLUMN submission_guide TEXT NOT NULL DEFAULT ''"],
+  ] as const;
+  for (const [column, statement] of missingClubColumns) {
+    if (!clubColumnNames.has(column)) await env.DB.prepare(statement).run();
   }
 
   const missingInviteTokens = await env.DB.prepare(

@@ -22,6 +22,9 @@ export const clubs = sqliteTable("clubs", {
     .references(() => events.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
+  stampEmoji: text("stamp_emoji").notNull().default("⭐"),
+  stampMessage: text("stamp_message").notNull().default(""),
+  submissionGuide: text("submission_guide").notNull().default(""),
   collectGender: integer("collect_gender", { mode: "boolean" })
     .notNull()
     .default(true),

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
 
@@ -25,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body className={geist.variable}>{children}</body>
+      <body className={geist.variable}>{children}<ServiceWorkerRegistration /></body>
     </html>
   );
 }

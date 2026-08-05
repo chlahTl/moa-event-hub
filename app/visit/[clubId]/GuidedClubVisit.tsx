@@ -6,6 +6,9 @@ type ClubInfo = {
   id: string;
   name: string;
   description: string;
+  stampEmoji: string;
+  stampMessage: string;
+  submissionGuide: string;
   collectGender: boolean;
   collectAge: boolean;
   eventName: string;
@@ -17,7 +20,7 @@ type ClubInfo = {
 type ClubStampResult = {
   event: { name: string; inviteToken: string };
   participant: { name: string };
-  stampedClub: { name: string };
+  stampedClub: { name: string; stampEmoji: string; submissionGuide: string };
   successMessage: string;
   progress: { completed: number; total: number };
 };
@@ -168,10 +171,11 @@ function ClubStampSuccess({ result, institution }: { result: ClubStampResult; in
     <main className="visit-shell success-shell">
       <header className="visit-header"><div className="brand-lockup"><span className="brand-mark">ㅁ</span><span>모아</span></div><span>{institution}</span></header>
       <section className="success-content">
-        <div className="success-mark"><span>✓</span><i /><i /></div>
+        <div className="success-mark"><span>{result.stampedClub.stampEmoji || "⭐"}</span><i /><i /></div>
         <p className="eyebrow"><span /> CLUB STAMP COMPLETE</p>
         <h1>{result.stampedClub.name}<br />참여 완료!</h1>
         <p>{result.successMessage}<br />현재 {result.progress.total}개 동아리 중 {result.progress.completed}개에 참여했습니다.</p>
+        {result.stampedClub.submissionGuide && <div className="success-hint"><span>→</span><p><strong>다음 안내</strong><br />{result.stampedClub.submissionGuide}</p></div>}
         <a className="button button-primary" target="_top" href={`/join/${result.event.inviteToken}`}>내 동아리 스탬프 보기 →</a>
       </section>
     </main>
@@ -191,10 +195,11 @@ function Success({ club, participantName }: { club: ClubInfo; participantName: s
     <main className="visit-shell success-shell">
       <header className="visit-header"><div className="brand-lockup"><span className="brand-mark">ㅁ</span><span>모아</span></div><span>{club.institution}</span></header>
       <section className="success-content">
-        <div className="success-mark"><span>✓</span><i /><i /></div>
+        <div className="success-mark"><span>{club.stampEmoji || "⭐"}</span><i /><i /></div>
         <p className="eyebrow"><span /> 참여 완료!</p>
         <h1>{participantName} 님,<br />참여했어요!</h1>
         <p><strong>{club.name}</strong> 참여가 잘 기록되었습니다. 다른 동아리에도 참여하려면 그 동아리의 QR을 새로 스캔해 주세요.</p>
+        {club.submissionGuide && <div className="success-hint"><span>→</span><p><strong>다음 안내</strong><br />{club.submissionGuide}</p></div>}
         <div className="success-summary"><span>행사</span><strong>{club.eventName}</strong><span>동아리</span><strong>{club.name}</strong><span>이름</span><strong>{participantName}</strong></div>
         <div className="success-hint"><span>⌗</span><p><strong>여러 동아리에 참여해도 괜찮아요.</strong><br />동아리마다 한 번씩 QR을 스캔하면 각각 참여로 기록돼요.</p></div>
       </section>
