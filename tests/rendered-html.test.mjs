@@ -35,6 +35,17 @@ test("server-renders the Moa landing page", async () => {
   assert.match(html, /href="\/admin"/);
 });
 
+test("uses native navigation links that work in the vinext client", async () => {
+  const [landing, dashboard] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/AdminDashboard.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.doesNotMatch(landing, /next\/link/);
+  assert.doesNotMatch(dashboard, /next\/link/);
+  assert.match(landing, /<a href="\/admin"[^>]*>첫 행사 만들기/);
+});
+
 test("keeps participant names and club responses connected", async () => {
   const [visitForm, responseRoute, schema, exportRoute, dashboard] = await Promise.all([
     readFile(new URL("../app/visit/[clubId]/VisitForm.tsx", import.meta.url), "utf8"),
