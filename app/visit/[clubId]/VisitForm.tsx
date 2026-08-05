@@ -14,6 +14,14 @@ type ClubInfo = {
   location: string;
 };
 
+type ClubStampResult = {
+  event: { name: string; inviteToken: string };
+  participant: { name: string };
+  stampedClub: { name: string };
+  successMessage: string;
+  progress: { completed: number; total: number };
+};
+
 const GENDERS = ["여성", "남성", "응답하지 않음"];
 const AGES = [
   { value: "유아", detail: "8세 이하" },
@@ -29,8 +37,9 @@ export default function VisitForm({ clubId }: { clubId: string }) {
   const [participantName, setParticipantName] = useState("");
   const [gender, setGender] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
-  const [status, setStatus] = useState<"loading" | "ready" | "submitting" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "submitting" | "success" | "stampSuccess" | "error">("loading");
   const [error, setError] = useState("");
+  const [stampResult, setStampResult] = useState<ClubStampResult | null>(null);
 
   useEffect(() => {
     fetch(`/api/clubs/${encodeURIComponent(clubId)}`, { cache: "no-store" })
@@ -38,7 +47,22 @@ export default function VisitForm({ clubId }: { clubId: string }) {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
         setClub(data.club);
-        setStatus("ready");
+        const claimResponse = await fetch("/api/stamps/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clubId }),
+        });
+        const claimData = await claimResponse.json();
+        if (claimResponse.ok) {
+          setStampResult(claimData);
+          setStatus("stampSuccess");
+          return;
+        }
+        if (claimResponse.status === 401) {
+          setStatus("ready");
+          return;
+        }
+        throw new Error(claimData.error || "동아리 QR을 처리하지 못했습니다.");
       })
       .catch((caught) => {
         setError(caught instanceof Error ? caught.message : "입력 화면을 열지 못했습니다.");
@@ -74,6 +98,7 @@ export default function VisitForm({ clubId }: { clubId: string }) {
 
   if (status === "loading") return <LoadingVisit />;
   if (status === "error" || !club) return <VisitError message={error} />;
+  if (status === "stampSuccess" && stampResult) return <ClubStampSuccess result={stampResult} institution={club.institution} />;
   if (status === "success") return <Success club={club} participantName={participantName.trim()} />;
 
   return (
@@ -133,6 +158,21 @@ export default function VisitForm({ clubId }: { clubId: string }) {
           </button>
         </form>
         <p className="visit-footer-note">제출하면 이 동아리의 참여 실적으로 기록됩니다.</p>
+      </section>
+    </main>
+  );
+}
+
+function ClubStampSuccess({ result, institution }: { result: ClubStampResult; institution: string }) {
+  return (
+    <main className="visit-shell success-shell">
+      <header className="visit-header"><div className="brand-lockup"><span className="brand-mark">ㅁ</span><span>모아</span></div><span>{institution}</span></header>
+      <section className="success-content">
+        <div className="success-mark"><span>✓</span><i /><i /></div>
+        <p className="eyebrow"><span /> CLUB STAMP COMPLETE</p>
+        <h1>{result.stampedClub.name}<br />참여 완료!</h1>
+        <p>{result.successMessage}<br />현재 {result.progress.total}개 동아리 중 {result.progress.completed}개에 참여했습니다.</p>
+        <a className="button button-primary" target="_top" href={`/join/${result.event.inviteToken}`}>내 동아리 스탬프 보기 →</a>
       </section>
     </main>
   );

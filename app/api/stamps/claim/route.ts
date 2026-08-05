@@ -1,27 +1,44 @@
 import { and, eq } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../../db";
-import { events, participants, stampPoints, stampRecords } from "../../../../db/schema";
+import { clubStampRecords, clubs, events, participants, responses, stampPoints, stampRecords } from "../../../../db/schema";
 import { hashDeviceToken, readDeviceToken } from "../../../../lib/participant-session";
 import { buildTourPayload, findParticipant } from "../../../../lib/tour-data";
 import { getEventAvailability } from "../../../../lib/tour";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { pointToken?: string };
+    const body = (await request.json()) as { pointToken?: string; clubId?: string };
     const pointToken = body.pointToken?.trim() ?? "";
-    if (!pointToken) return Response.json({ error: "스탬프 QR 정보가 없습니다." }, { status: 400 });
+    const clubId = body.clubId?.trim() ?? "";
+    if (!pointToken && !clubId) {
+      return Response.json({ error: "동아리 또는 추가 지점 QR 정보가 없습니다." }, { status: 400 });
+    }
 
     await ensureDatabase();
     const db = getDb();
-    const [row] = await db
-      .select({ point: stampPoints, event: events })
-      .from(stampPoints)
-      .innerJoin(events, eq(stampPoints.eventId, events.id))
-      .where(eq(stampPoints.token, pointToken))
-      .limit(1);
-    if (!row) return Response.json({ error: "유효하지 않은 스탬프 QR입니다." }, { status: 404 });
-    if (!row.point.active) return Response.json({ error: "현재 사용할 수 없는 스탬프 지점입니다." }, { status: 410 });
-    const availability = getEventAvailability(row.event);
+    const [target] = clubId
+      ? await db
+          .select({ club: clubs, event: events })
+          .from(clubs)
+          .innerJoin(events, eq(clubs.eventId, events.id))
+          .where(eq(clubs.id, clubId))
+          .limit(1)
+      : await db
+          .select({ point: stampPoints, event: events })
+          .from(stampPoints)
+          .innerJoin(events, eq(stampPoints.eventId, events.id))
+          .where(eq(stampPoints.token, pointToken))
+          .limit(1);
+
+    if (!target) {
+      return Response.json({ error: clubId ? "유효하지 않은 동아리 QR입니다." : "유효하지 않은 추가 지점 QR입니다." }, { status: 404 });
+    }
+    const targetClub = "club" in target ? target.club : null;
+    const targetPoint = "point" in target ? target.point : null;
+    if (targetPoint && !targetPoint.active) {
+      return Response.json({ error: "현재 사용할 수 없는 추가 지점입니다." }, { status: 410 });
+    }
+    const availability = getEventAvailability(target.event);
     if (!availability.available) return Response.json({ error: availability.message }, { status: 410 });
 
     const deviceToken = readDeviceToken(request);
@@ -29,7 +46,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "먼저 행사 초대 QR로 참가 등록을 해 주세요." }, { status: 401 });
     }
     const deviceTokenHash = await hashDeviceToken(deviceToken);
-    const participant = await findParticipant(row.event.id, deviceTokenHash);
+    const participant = await findParticipant(target.event.id, deviceTokenHash);
     if (!participant) {
       const [otherEventParticipant] = await db
         .select({ id: participants.id })
@@ -42,28 +59,58 @@ export async function POST(request: Request) {
       );
     }
 
+    if (targetClub) {
+      const inserted = await db.insert(clubStampRecords).values({
+        id: crypto.randomUUID(),
+        eventId: target.event.id,
+        participantId: participant.id,
+        clubId: targetClub.id,
+      }).onConflictDoNothing().returning({ id: clubStampRecords.id });
+      const duplicate = inserted.length === 0;
+      if (!duplicate) {
+        await db.insert(responses).values({
+          id: crypto.randomUUID(),
+          eventId: target.event.id,
+          clubId: targetClub.id,
+          participantName: participant.participantName,
+          gender: targetClub.collectGender ? participant.gender : null,
+          ageGroup: targetClub.collectAge ? participant.ageGroup : null,
+        });
+      }
+      return Response.json({
+        ...(await buildTourPayload(
+          target.event,
+          participant,
+          duplicate ? "이미 참여한 동아리예요." : `${targetClub.name} 참여 스탬프를 받았어요!`,
+        )),
+        duplicate,
+        stampedClub: { id: targetClub.id, name: targetClub.name },
+      });
+    }
+
+    if (!targetPoint) throw new Error("스탬프 대상을 확인하지 못했습니다.");
     const [existing] = await db
       .select({ id: stampRecords.id })
       .from(stampRecords)
-      .where(and(eq(stampRecords.participantId, participant.id), eq(stampRecords.stampPointId, row.point.id)))
+      .where(and(eq(stampRecords.participantId, participant.id), eq(stampRecords.stampPointId, targetPoint.id)))
       .limit(1);
     if (!existing) {
       await db.insert(stampRecords).values({
         id: crypto.randomUUID(),
-        eventId: row.event.id,
+        eventId: target.event.id,
         participantId: participant.id,
-        stampPointId: row.point.id,
+        stampPointId: targetPoint.id,
       }).onConflictDoNothing();
     }
 
     return Response.json({
       ...(await buildTourPayload(
-        row.event,
+        target.event,
         participant,
-        existing ? "이미 받은 스탬프예요." : `${row.point.name} 스탬프를 받았어요!`,
+        existing ? "이미 받은 추가 지점 스탬프예요." : `${targetPoint.name} 스탬프를 받았어요!`,
       )),
       duplicate: Boolean(existing),
-      stampedPoint: { id: row.point.id, name: row.point.name },
+      stampedPoint: { id: targetPoint.id, name: targetPoint.name },
     });
   } catch (error) {
     return Response.json(

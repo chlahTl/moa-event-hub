@@ -93,3 +93,20 @@ export const stampRecords = sqliteTable("stamp_records", {
   uniqueIndex("stamp_records_participant_point_unique").on(table.participantId, table.stampPointId),
   index("idx_stamp_records_event_participant").on(table.eventId, table.participantId),
 ]);
+
+export const clubStampRecords = sqliteTable("club_stamp_records", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  participantId: text("participant_id")
+    .notNull()
+    .references(() => participants.id, { onDelete: "cascade" }),
+  clubId: text("club_id")
+    .notNull()
+    .references(() => clubs.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("club_stamp_records_participant_club_unique").on(table.participantId, table.clubId),
+  index("idx_club_stamp_records_event_participant").on(table.eventId, table.participantId),
+]);

@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { events, participants, stampPoints, stampRecords } from "../db/schema";
+import { clubStampRecords, clubs, events, participants, stampPoints, stampRecords } from "../db/schema";
 
 export async function findEventByInviteToken(inviteToken: string) {
   const db = getDb();
@@ -24,6 +24,11 @@ export async function buildTourPayload(
   successMessage = "",
 ) {
   const db = getDb();
+  const eventClubs = await db
+    .select()
+    .from(clubs)
+    .where(eq(clubs.eventId, event.id))
+    .orderBy(asc(clubs.createdAt));
   const points = await db
     .select()
     .from(stampPoints)
@@ -35,8 +40,16 @@ export async function buildTourPayload(
         .from(stampRecords)
         .where(and(eq(stampRecords.eventId, event.id), eq(stampRecords.participantId, participant.id)))
     : [];
+  const visitedClubs = participant
+    ? await db
+        .select({ clubId: clubStampRecords.clubId, createdAt: clubStampRecords.createdAt })
+        .from(clubStampRecords)
+        .where(and(eq(clubStampRecords.eventId, event.id), eq(clubStampRecords.participantId, participant.id)))
+    : [];
   const visitedMap = new Map(visited.map((record) => [record.stampPointId, record.createdAt]));
+  const visitedClubMap = new Map(visitedClubs.map((record) => [record.clubId, record.createdAt]));
   const completed = points.filter((point) => visitedMap.has(point.id)).length;
+  const completedClubs = eventClubs.filter((club) => visitedClubMap.has(club.id)).length;
   return {
     event: {
       id: event.id,
@@ -56,7 +69,14 @@ export async function buildTourPayload(
           ageGroup: participant.ageGroup,
         }
       : null,
-    points: points.map((point) => ({
+    clubs: eventClubs.map((club) => ({
+      id: club.id,
+      name: club.name,
+      description: club.description,
+      visited: visitedClubMap.has(club.id),
+      visitedAt: visitedClubMap.get(club.id) ?? null,
+    })),
+    extraPoints: points.map((point) => ({
       id: point.id,
       name: point.name,
       description: point.description,
@@ -64,6 +84,11 @@ export async function buildTourPayload(
       visitedAt: visitedMap.get(point.id) ?? null,
     })),
     progress: {
+      completed: completedClubs,
+      total: eventClubs.length,
+      percent: eventClubs.length ? Math.round((completedClubs / eventClubs.length) * 100) : 0,
+    },
+    extraProgress: {
       completed,
       total: points.length,
       percent: points.length ? Math.round((completed / points.length) * 100) : 0,

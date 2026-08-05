@@ -16,8 +16,10 @@ type TourData = {
     inviteToken: string;
   };
   participant: { id: string; name: string; gender: string | null; ageGroup: string | null } | null;
-  points: Point[];
+  clubs: Point[];
+  extraPoints: Point[];
   progress: { completed: number; total: number; percent: number };
+  extraProgress: { completed: number; total: number; percent: number };
   successMessage: string;
 };
 
@@ -75,13 +77,13 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
 
   useEffect(() => () => stopScanner(), [stopScanner]);
 
-  async function claimStamp(pointToken: string) {
+  async function claimStamp(target: { pointToken?: string; clubId?: string }) {
     setClaiming(true);
     setError("");
     const response = await fetch("/api/stamps/claim", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pointToken }),
+      body: JSON.stringify(target),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "스탬프를 등록하지 못했습니다.");
@@ -93,10 +95,13 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
   async function handleScannedText(text: string) {
     try {
       const url = new URL(text, window.location.origin);
-      const match = url.pathname.match(/^\/stamp\/([^/]+)\/?$/);
-      if (!match) throw new Error("스탬프 지점 QR이 아닙니다. 행사장에 설치된 QR을 스캔해 주세요.");
+      const clubMatch = url.pathname.match(/^\/visit\/([^/]+)\/?$/);
+      const pointMatch = url.pathname.match(/^\/stamp\/([^/]+)\/?$/);
+      if (!clubMatch && !pointMatch) throw new Error("동아리 또는 추가 지점 QR이 아닙니다. 행사 QR을 스캔해 주세요.");
       setScannerStatus("스탬프를 확인하고 있어요…");
-      await claimStamp(decodeURIComponent(match[1]));
+      await claimStamp(clubMatch
+        ? { clubId: decodeURIComponent(clubMatch[1]) }
+        : { pointToken: decodeURIComponent(pointMatch![1]) });
     } catch (caught) {
       setClaiming(false);
       scanLocked.current = false;
@@ -154,7 +159,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
     return <JoinForm inviteToken={inviteToken} event={tour.event} onJoined={setTour} />;
   }
 
-  const remaining = tour.points.filter((point) => !point.visited);
+  const remaining = tour.clubs.filter((club) => !club.visited);
   return (
     <main className="tour-shell">
       <header className="tour-header">
@@ -165,7 +170,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
         <div>
           <p className="tour-kicker">STAMP TOUR · {tour.participant.name} 님</p>
           <h1>{tour.event.name}</h1>
-          <p>{tour.event.description || "행사장의 QR을 찾아 스탬프를 모아 보세요."}</p>
+          <p>{tour.event.description || "동아리 QR을 스캔하며 참여 스탬프를 모아 보세요."}</p>
         </div>
         <button className="scan-button" onClick={startScanner}><span>⌗</span> QR 스캔</button>
       </section>
@@ -176,35 +181,49 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
       <section className="tour-progress-card">
         <div className="tour-count"><strong>{tour.progress.completed}</strong><span>/ {tour.progress.total}</span></div>
         <div className="tour-progress-copy">
-          <div><strong>{tour.progress.total}개 지점 중 {tour.progress.completed}개 완료</strong><span>{tour.progress.percent}%</span></div>
+          <div><strong>{tour.progress.total}개 동아리 중 {tour.progress.completed}개 참여</strong><span>{tour.progress.percent}%</span></div>
           <div className="tour-progress-track"><i style={{ width: `${tour.progress.percent}%` }} /></div>
-          <p>{remaining.length ? `앞으로 ${remaining.length}개 지점이 남았어요.` : tour.points.length ? "모든 지점을 방문했어요!" : "관리자가 지점을 준비하고 있어요."}</p>
+          <p>{remaining.length ? `앞으로 ${remaining.length}개 동아리가 남았어요.` : tour.clubs.length ? "모든 동아리에 참여했어요!" : "관리자가 동아리를 준비하고 있어요."}</p>
         </div>
       </section>
 
       <section className="tour-points">
-        <div className="tour-section-heading"><div><p>MY STAMPS</p><h2>스탬프 현황</h2></div><button onClick={startScanner}>카메라 열기</button></div>
-        {tour.points.length ? (
+        <div className="tour-section-heading"><div><p>CLUB STAMPS · PRIMARY</p><h2>동아리 참여 현황</h2></div><button onClick={startScanner}>동아리 QR 스캔</button></div>
+        {tour.clubs.length ? (
           <div className="tour-point-grid">
-            {tour.points.map((point, index) => (
-              <article className={point.visited ? "tour-point visited" : "tour-point"} key={point.id}>
-                <div className="stamp-medal">{point.visited ? "✓" : String(index + 1).padStart(2, "0")}</div>
-                <div><span>{point.visited ? "방문 완료" : "아직 방문 전"}</span><h3>{point.name}</h3><p>{point.description || "현장에서 지점 QR을 찾아 주세요."}</p></div>
+            {tour.clubs.map((club, index) => (
+              <article className={club.visited ? "tour-point visited" : "tour-point"} key={club.id}>
+                <div className="stamp-medal">{club.visited ? "✓" : String(index + 1).padStart(2, "0")}</div>
+                <div><span>{club.visited ? "참여 완료" : "아직 참여 전"}</span><h3>{club.name}</h3><p>{club.description || "동아리 QR을 스캔해 참여해 주세요."}</p></div>
               </article>
             ))}
           </div>
-        ) : <div className="tour-empty">등록된 스탬프 지점이 아직 없습니다.</div>}
+        ) : <div className="tour-empty">등록된 동아리가 아직 없습니다.</div>}
       </section>
+
+      {tour.extraPoints.length > 0 && (
+        <section className="tour-points tour-extra-points">
+          <div className="tour-section-heading"><div><p>OPTIONAL STAMPS</p><h2>추가 지점 스탬프</h2></div><span>{tour.extraProgress.total}곳 중 {tour.extraProgress.completed}곳</span></div>
+          <div className="tour-point-grid">
+            {tour.extraPoints.map((point, index) => (
+              <article className={point.visited ? "tour-point visited" : "tour-point"} key={point.id}>
+                <div className="stamp-medal">{point.visited ? "✓" : `＋${index + 1}`}</div>
+                <div><span>{point.visited ? "방문 완료" : "선택 방문"}</span><h3>{point.name}</h3><p>{point.description || "추가 지점 QR을 찾아 주세요."}</p></div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {scannerOpen && (
         <div className="scanner-backdrop" role="dialog" aria-modal="true" aria-label="QR 스캐너">
           <section className="scanner-panel">
             <button className="scanner-close" onClick={closeScanner} aria-label="스캐너 닫기">×</button>
             <p className="tour-kicker">POINT QR SCAN</p>
-            <h2>지점 QR을 비춰 주세요.</h2>
+            <h2>동아리 QR을 비춰 주세요.</h2>
             <div className="scanner-frame"><video ref={videoRef} muted playsInline /><i /><i /><i /><i /></div>
             <p className={scannerStatus.includes("거부") || scannerStatus.includes("아닙니다") ? "scanner-message error" : "scanner-message"}>{claiming ? "스탬프를 등록하고 있어요…" : scannerStatus}</p>
-            <small>카메라 사용이 어렵다면 휴대폰 기본 카메라로 지점 QR을 열어도 자동 등록됩니다.</small>
+            <small>동아리 QR이 기본입니다. 추가 지점 QR도 같은 화면에서 인식할 수 있어요.</small>
           </section>
         </div>
       )}

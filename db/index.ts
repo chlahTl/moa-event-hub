@@ -74,6 +74,13 @@ export async function ensureDatabase() {
       stamp_point_id TEXT NOT NULL REFERENCES stamp_points(id) ON DELETE CASCADE,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS club_stamp_records (
+      id TEXT PRIMARY KEY NOT NULL,
+      event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+      club_id TEXT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     env.DB.prepare(
       "CREATE INDEX IF NOT EXISTS idx_clubs_event_id ON clubs(event_id)",
     ),
@@ -100,6 +107,12 @@ export async function ensureDatabase() {
     ),
     env.DB.prepare(
       "CREATE INDEX IF NOT EXISTS idx_stamp_records_event_participant ON stamp_records(event_id, participant_id)",
+    ),
+    env.DB.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS club_stamp_records_participant_club_unique ON club_stamp_records(participant_id, club_id)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_club_stamp_records_event_participant ON club_stamp_records(event_id, participant_id)",
     ),
   ]);
 

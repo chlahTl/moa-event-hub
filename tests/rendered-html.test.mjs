@@ -69,7 +69,7 @@ test("keeps participant names and club responses connected", async () => {
 test("stamp tour schema prevents duplicate participants and stamps", async () => {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON");
-  for (const migrationName of ["0000_eager_blockbuster.sql", "0001_dizzy_kulan_gath.sql", "0002_warm_tomas.sql"]) {
+  for (const migrationName of ["0000_eager_blockbuster.sql", "0001_dizzy_kulan_gath.sql", "0002_warm_tomas.sql", "0003_condemned_robbie_robertson.sql"]) {
     const migration = await readFile(new URL(`../drizzle/${migrationName}`, import.meta.url), "utf8");
     for (const statement of migration.split("--> statement-breakpoint").map((part) => part.trim()).filter(Boolean)) {
       database.exec(statement);
@@ -83,6 +83,13 @@ test("stamp tour schema prevents duplicate participants and stamps", async () =>
     /UNIQUE constraint failed/,
   );
 
+  database.prepare("INSERT INTO clubs (id, event_id, name) VALUES (?, ?, ?)").run("club-1", "event-1", "찬양팀");
+  database.prepare("INSERT INTO club_stamp_records (id, event_id, participant_id, club_id) VALUES (?, ?, ?, ?)").run("club-record-1", "event-1", "person-1", "club-1");
+  assert.throws(
+    () => database.prepare("INSERT INTO club_stamp_records (id, event_id, participant_id, club_id) VALUES (?, ?, ?, ?)").run("club-record-2", "event-1", "person-1", "club-1"),
+    /UNIQUE constraint failed/,
+  );
+
   database.prepare("INSERT INTO stamp_points (id, event_id, token, name) VALUES (?, ?, ?, ?)").run("point-1", "event-1", "point-token", "포토존");
   database.prepare("INSERT INTO stamp_records (id, event_id, participant_id, stamp_point_id) VALUES (?, ?, ?, ?)").run("record-1", "event-1", "person-1", "point-1");
   assert.throws(
@@ -93,12 +100,13 @@ test("stamp tour schema prevents duplicate participants and stamps", async () =>
 });
 
 test("stamp APIs keep identity server-side and validate event ownership", async () => {
-  const [session, joinRoute, claimRoute, dashboard, scanner] = await Promise.all([
+  const [session, joinRoute, claimRoute, dashboard, scanner, clubVisit] = await Promise.all([
     readFile(new URL("../lib/participant-session.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/tour/[inviteToken]/join/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/stamps/claim/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/StampTourDashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/join/[inviteToken]/EventTour.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/visit/[clubId]/VisitForm.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(session, /HttpOnly/);
@@ -106,11 +114,16 @@ test("stamp APIs keep identity server-side and validate event ownership", async 
   assert.match(session, /SHA-256/);
   assert.match(joinRoute, /deviceTokenHash/);
   assert.match(joinRoute, /"Set-Cookie": participantCookie\(deviceToken, request\)/);
-  assert.match(claimRoute, /findParticipant\(row\.event\.id, deviceTokenHash\)/);
+  assert.match(claimRoute, /findParticipant\(target\.event\.id, deviceTokenHash\)/);
   assert.match(claimRoute, /다른 QR입니다/);
   assert.match(claimRoute, /onConflictDoNothing/);
+  assert.match(claimRoute, /clubStampRecords/);
+  assert.match(claimRoute, /participantName: participant\.participantName/);
   assert.match(dashboard, /\/join\/\$\{event\.inviteToken\}/);
   assert.match(dashboard, /\/stamp\/\$\{point\.token\}/);
   assert.match(scanner, /NotAllowedError/);
   assert.match(scanner, /카메라 권한이 거부됐어요/);
+  assert.match(scanner, /clubId/);
+  assert.match(clubVisit, /JSON\.stringify\(\{ clubId \}\)/);
+  assert.match(clubVisit, /stampSuccess/);
 });

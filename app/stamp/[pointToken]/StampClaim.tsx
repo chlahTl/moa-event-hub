@@ -6,7 +6,7 @@ type ClaimResult = {
   event: { name: string; inviteToken: string };
   stampedPoint: { name: string };
   successMessage: string;
-  progress: { completed: number; total: number };
+  extraProgress: { completed: number; total: number };
 };
 
 export default function StampClaim({ pointToken }: { pointToken: string }) {
@@ -35,7 +35,7 @@ export default function StampClaim({ pointToken }: { pointToken: string }) {
         <div className="success-mark"><span>✓</span><i /><i /></div>
         <p className="eyebrow"><span /> STAMP COMPLETE</p>
         <h1>{result.stampedPoint.name}<br />스탬프 완료!</h1>
-        <p>{result.successMessage}<br />현재 {result.progress.total}개 지점 중 {result.progress.completed}개를 완료했습니다.</p>
+        <p>{result.successMessage}<br />추가 지점 {result.extraProgress.total}곳 중 {result.extraProgress.completed}곳을 완료했습니다.</p>
         <a className="button button-primary" target="_top" href={`/join/${result.event.inviteToken}`}>내 스탬프 현황 보기 →</a>
       </section>
     </main>

@@ -176,8 +176,8 @@ export default function AdminDashboard() {
     return openShareQr({
       title: club.name,
       kicker: "CLUB QR · READY",
-      intro: "이 QR은 이 동아리의 입력 항목으로 바로 연결됩니다.",
-      label: `이름${club.collectGender ? " · 성별" : ""}${club.collectAge ? " · 연령 구분" : ""}`,
+      intro: "행사 참가자가 스캔하면 이름을 다시 묻지 않고 이 동아리의 참여 스탬프가 자동 등록됩니다.",
+      label: `기본 스탬프 · ${club.name}`,
       link: `${window.location.origin}/visit/${club.id}`,
       filename: `${club.name}-QR.png`,
     });
@@ -215,8 +215,9 @@ export default function AdminDashboard() {
         <p className="workspace-label">NCHM 연계 운영</p>
         <nav className="side-nav" aria-label="관리자 메뉴">
           <a href="#overview" className="active"><span>⌂</span>대시보드</a>
-          <a href="#clubs"><span>◫</span>행사 · 동아리</a>
-          <a href="#stamps"><span>⌗</span>스탬프 투어</a>
+          <a href="#overview"><span>◇</span>행사 관리</a>
+          <a href="#clubs"><span>⌗</span>동아리 스탬프</a>
+          <a href="#stamps"><span>＋</span>추가 지점</a>
           <a href="#responses"><span>≡</span>응답 내역</a>
           <a href="#integration"><span>↔</span>연동 안내</a>
         </nav>
@@ -262,9 +263,9 @@ export default function AdminDashboard() {
                 </div>
                 <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span></div>
                 <div className="spotlight-actions">
-                  <button onClick={() => openEventQr(selected)}>초대 QR <span>⌗</span></button>
-                  <button onClick={() => setModal("stampPoint")}>스탬프 지점 <span>＋</span></button>
-                  <a href={`/api/export?eventId=${selected.id}`}>엑셀용 CSV <span>↓</span></a>
+                  <button onClick={() => setModal("club")}>동아리 추가 <span>＋</span></button>
+                  <button className="secondary-spotlight" onClick={() => openEventQr(selected)}>초대 QR <span>⌗</span></button>
+                  <a href="#stamps">추가 지점 관리 <span>＋</span></a>
                 </div>
               </div>
 
@@ -272,12 +273,12 @@ export default function AdminDashboard() {
                 <Metric label="전체 행사" value={events.length} note="누적 생성" symbol="◇" />
                 <Metric label="등록 동아리" value={totalClubs} note={`${selected.clubs.length}개 현재 행사`} symbol="◫" />
                 <Metric label="행사 참가자" value={totalParticipants} note={`${selected.participantCount}명 현재 행사`} symbol="↗" />
-                <Metric label="스탬프 지점" value={selected.stampPoints.length} note="지점별 전용 QR" symbol="✓" />
+                <Metric label="기본 스탬프" value={selected.clubs.length} note="동아리 QR 기준" symbol="✓" />
               </div>
 
               <section className="dashboard-section" id="clubs">
                 <div className="dashboard-heading">
-                  <div><p>동아리 관리</p><h2>동아리별 입력 링크</h2></div>
+                  <div><p>기본 스탬프 · 동아리 QR</p><h2>동아리 참여 스탬프</h2></div>
                   <button className="subtle-button" onClick={() => setModal("club")}>＋ 동아리 추가</button>
                 </div>
                 {selected.clubs.length ? (
@@ -292,21 +293,21 @@ export default function AdminDashboard() {
                           {club.collectGender && <span>성별</span>}
                           {club.collectAge && <span>연령 구분</span>}
                         </div>
-                        <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button onClick={() => openClubQr(club)}>QR · 링크 보기 →</button></div>
+                        <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button onClick={() => openClubQr(club)}>기본 스탬프 QR →</button></div>
                       </article>
                     ))}
                   </div>
                 ) : (
-                  <button className="empty-clubs" onClick={() => setModal("club")}><span>＋</span><strong>첫 동아리 추가</strong><small>받을 항목을 고르면 QR이 바로 만들어집니다.</small></button>
+                  <button className="empty-clubs" onClick={() => setModal("club")}><span>＋</span><strong>첫 동아리 스탬프 만들기</strong><small>동아리를 추가하면 기본 참여 QR이 바로 만들어집니다.</small></button>
                 )}
               </section>
 
               <section className="dashboard-section" id="stamps">
                 <div className="dashboard-heading">
-                  <div><p>스탬프 투어</p><h2>행사장 QR 지점</h2></div>
+                  <div><p>선택 기능 · EXTRA POINTS</p><h2>추가 지점 QR</h2></div>
                   <div className="heading-actions">
                     <button className="subtle-button" onClick={() => openEventQr(selected)}>초대 QR 보기</button>
-                    <button className="subtle-button" onClick={() => setModal("stampPoint")}>＋ 지점 추가</button>
+                    <button className="subtle-button" onClick={() => setModal("stampPoint")}>＋ 추가 지점</button>
                   </div>
                 </div>
                 {selected.stampPoints.length ? (
@@ -321,7 +322,7 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 ) : (
-                  <button className="empty-clubs" onClick={() => setModal("stampPoint")}><span>⌗</span><strong>첫 스탬프 지점 추가</strong><small>지점마다 서로 다른 출력용 QR이 만들어집니다.</small></button>
+                  <button className="empty-clubs" onClick={() => setModal("stampPoint")}><span>⌗</span><strong>선택: 추가 지점 만들기</strong><small>동아리 외에 포토존·체험 부스 등이 필요할 때만 사용합니다.</small></button>
                 )}
               </section>
 
@@ -366,7 +367,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <div className="empty-illustration"><span>＋</span><i /><i /><i /></div>
       <p className="eyebrow"><span /> READY TO START</p>
       <h2>첫 행사를 만들어 볼까요?</h2>
-      <p>행사를 만들면 참가자 초대 QR이 바로 생기고, 동아리와 스탬프 지점을 원하는 만큼 추가할 수 있습니다.</p>
+      <p>행사를 만든 뒤 동아리를 추가하면 각 동아리 QR이 기본 참여 스탬프로 사용됩니다. 추가 지점은 필요할 때만 더할 수 있습니다.</p>
       <button className="button button-primary" onClick={onCreate}>새 행사 만들기 →</button>
     </section>
   );
@@ -412,11 +413,11 @@ function EventModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (eve
 }
 
 function ClubModal({ eventName, onClose, onSubmit }: { eventName: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <ModalShell title="동아리 추가" kicker="STEP 02 · CLUB" onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong> 안에 소분류와 전용 QR을 만듭니다. 이름은 모든 동아리에서 기본으로 받습니다.</p><form className="modal-form" onSubmit={onSubmit}><label>동아리명<input name="name" required autoFocus placeholder="예: 청년 찬양팀" /></label><label>안내 문구 <small>선택</small><input name="description" placeholder="입력 화면에 함께 보여줄 짧은 설명" /></label><fieldset><legend>추가로 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">동아리와 QR 만들기 →</button></div></form></ModalShell>;
+  return <ModalShell title="동아리 스탬프 추가" kicker="STEP 02 · PRIMARY STAMP" onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 기본 스탬프가 될 동아리와 QR을 만듭니다. 행사 참가자는 이 QR을 스캔하면 이름을 다시 입력하지 않습니다.</p><form className="modal-form" onSubmit={onSubmit}><label>동아리명<input name="name" required autoFocus placeholder="예: 청년 찬양팀" /></label><label>안내 문구 <small>선택</small><input name="description" placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><fieldset><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">동아리 스탬프 QR 만들기 →</button></div></form></ModalShell>;
 }
 
 function StampPointModal({ eventName, onClose, onSubmit }: { eventName: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <ModalShell title="스탬프 지점 추가" kicker="STAMP TOUR · POINT" onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong> 행사장 안에 방문 지점과 전용 QR을 만듭니다.</p><form className="modal-form" onSubmit={onSubmit}><label>지점명<input name="name" required autoFocus maxLength={40} placeholder="예: 포토존" /></label><label>지점 설명 <small>선택</small><textarea name="description" rows={3} placeholder="참가자 진행 화면에 보여줄 안내" /></label><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">지점과 QR 만들기 →</button></div></form></ModalShell>;
+  return <ModalShell title="추가 지점 만들기" kicker="OPTIONAL · EXTRA POINT" onClose={onClose}><p className="modal-intro">기본 스탬프는 동아리 QR입니다. <strong>{eventName}</strong>에 포토존 같은 별도 방문 지점이 필요할 때만 추가해 주세요.</p><form className="modal-form" onSubmit={onSubmit}><label>추가 지점명<input name="name" required autoFocus maxLength={40} placeholder="예: 포토존" /></label><label>지점 설명 <small>선택</small><textarea name="description" rows={3} placeholder="참가자 진행 화면에 보여줄 안내" /></label><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">추가 지점 QR 만들기 →</button></div></form></ModalShell>;
 }
 
 function QrModal({ qr, data, onClose, onNotify }: { qr: ShareQr; data: string; onClose: () => void; onNotify: (message: string) => void }) {
