@@ -1,0 +1,1 @@
+ALTER TABLE `responses` ADD `participant_name` text DEFAULT '' NOT NULL;
