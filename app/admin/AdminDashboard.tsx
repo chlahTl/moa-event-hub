@@ -130,7 +130,7 @@ export default function AdminDashboard() {
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
-        <a href="/" className="brand-lockup brand-admin"><span className="brand-mark">ㅁ</span><span>모아</span></a>
+        <a href="/" target="_top" className="brand-lockup brand-admin"><span className="brand-mark">ㅁ</span><span>모아</span></a>
         <p className="workspace-label">NCHM 연계 운영</p>
         <nav className="side-nav" aria-label="관리자 메뉴">
           <a href="#overview" className="active"><span>⌂</span>대시보드</a>
@@ -142,7 +142,7 @@ export default function AdminDashboard() {
           <span className="status-dot" /> 독립 운영 중
           <p>NCHM Visite와 연결하지 않아도 바로 사용할 수 있습니다.</p>
         </div>
-        <a href="/" className="back-link">← 소개 화면으로</a>
+        <a href="/" target="_top" className="back-link">← 소개 화면으로</a>
       </aside>
 
       <section className="admin-main">

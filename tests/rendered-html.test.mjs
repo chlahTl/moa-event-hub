@@ -43,7 +43,7 @@ test("uses native navigation links that work in the vinext client", async () => 
 
   assert.doesNotMatch(landing, /next\/link/);
   assert.doesNotMatch(dashboard, /next\/link/);
-  assert.match(landing, /<a href="\/admin"[^>]*>첫 행사 만들기/);
+  assert.match(landing, /<a href="\/admin" target="_top"[^>]*>첫 행사 만들기/);
 });
 
 test("keeps participant names and club responses connected", async () => {

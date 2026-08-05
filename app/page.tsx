@@ -2,12 +2,12 @@ export default function Home() {
   return (
     <main className="landing-shell">
       <nav className="landing-nav">
-        <a href="/" className="brand-lockup" aria-label="모아 홈">
+        <a href="/" target="_top" className="brand-lockup" aria-label="모아 홈">
           <span className="brand-mark">ㅁ</span>
           <span>모아</span>
         </a>
         <span className="institution-chip">NCHM 연계 행사 운영 시안</span>
-        <a href="/admin" className="text-link">관리자 화면 <span>↗</span></a>
+        <a href="/admin" target="_top" className="text-link">관리자 화면 <span>↗</span></a>
       </nav>
 
       <section className="hero-section">
@@ -19,7 +19,7 @@ export default function Home() {
             QR 입력부터 분류·집계·엑셀 내려받기까지 하나의 흐름으로 이어집니다.
           </p>
           <div className="hero-actions">
-            <a href="/admin" className="button button-primary">첫 행사 만들기 <span>→</span></a>
+            <a href="/admin" target="_top" className="button button-primary">첫 행사 만들기 <span>→</span></a>
             <a href="#flow" className="button button-ghost">작동 방식 보기</a>
           </div>
           <div className="hero-proof">
@@ -61,7 +61,7 @@ export default function Home() {
       <footer className="landing-footer">
         <div className="brand-lockup"><span className="brand-mark">ㅁ</span><span>모아</span></div>
         <p>NCHM 관련 행사 운영을 위한 독립형 1차 시안</p>
-        <a href="/admin">관리자 화면 시작하기 →</a>
+        <a href="/admin" target="_top">관리자 화면 시작하기 →</a>
       </footer>
     </main>
   );
