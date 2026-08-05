@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import QRCode from "qrcode";
 
 type Club = {
@@ -13,14 +13,39 @@ type Club = {
   responseCount: number;
 };
 
+type StampPoint = {
+  id: string;
+  eventId: string;
+  token: string;
+  name: string;
+  description: string;
+  position: number;
+  active: boolean;
+};
+
 type EventItem = {
   id: string;
   name: string;
+  description: string;
   institution: string;
   eventDate: string;
+  startDate: string;
+  endDate: string;
+  inviteToken: string;
   location: string;
   responseCount: number;
+  participantCount: number;
   clubs: Club[];
+  stampPoints: StampPoint[];
+};
+
+type ShareQr = {
+  title: string;
+  kicker: string;
+  intro: string;
+  label: string;
+  link: string;
+  filename: string;
 };
 
 type StatItem = { label: string; total: number };
@@ -34,8 +59,8 @@ export default function AdminDashboard() {
   const [selectedId, setSelectedId] = useState("");
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<"event" | "club" | "qr" | null>(null);
-  const [qrClub, setQrClub] = useState<Club | null>(null);
+  const [modal, setModal] = useState<"event" | "club" | "stampPoint" | "qr" | null>(null);
+  const [shareQr, setShareQr] = useState<ShareQr | null>(null);
   const [qrData, setQrData] = useState("");
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -89,9 +114,16 @@ export default function AdminDashboard() {
     });
     const data = await response.json();
     if (!response.ok) return setError(data.error);
-    setModal(null);
     await loadEvents(data.event.id);
     notify("새 행사를 만들었습니다.");
+    await openShareQr({
+      title: data.event.name,
+      kicker: "EVENT INVITE QR · READY",
+      intro: "참가자가 처음 스캔해 행사 정보와 이름을 등록하는 초대 QR입니다.",
+      label: "행사 참가 등록",
+      link: `${window.location.origin}/join/${data.event.inviteToken}`,
+      filename: `${data.event.name}-초대-QR.png`,
+    });
   }
 
   async function createClub(event: FormEvent<HTMLFormElement>) {
@@ -117,15 +149,64 @@ export default function AdminDashboard() {
     notify("동아리와 전용 QR을 만들었습니다.");
   }
 
-  async function openQr(club: Club) {
-    const url = `${window.location.origin}/visit/${club.id}`;
-    setQrClub(club);
-    setQrData(await QRCode.toDataURL(url, { width: 720, margin: 2, color: { dark: "#123d37", light: "#ffffff" } }));
+  async function createStampPoint(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const response = await fetch("/api/stamp-points", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: selected.id, name: form.get("name"), description: form.get("description") }),
+    });
+    const data = await response.json();
+    if (!response.ok) return setError(data.error);
+    await loadEvents(selected.id);
+    notify("스탬프 지점과 전용 QR을 만들었습니다.");
+    await openStampQr(data.point);
+  }
+
+  async function openShareQr(qr: ShareQr) {
+    setShareQr(qr);
+    setQrData(await QRCode.toDataURL(qr.link, { width: 720, margin: 2, color: { dark: "#123d37", light: "#ffffff" } }));
     setModal("qr");
   }
 
+  function openClubQr(club: Club) {
+    return openShareQr({
+      title: club.name,
+      kicker: "CLUB QR · READY",
+      intro: "이 QR은 이 동아리의 입력 항목으로 바로 연결됩니다.",
+      label: `이름${club.collectGender ? " · 성별" : ""}${club.collectAge ? " · 연령 구분" : ""}`,
+      link: `${window.location.origin}/visit/${club.id}`,
+      filename: `${club.name}-QR.png`,
+    });
+  }
+
+  function openEventQr(event: EventItem) {
+    return openShareQr({
+      title: event.name,
+      kicker: "EVENT INVITE QR · READY",
+      intro: "참가자가 최초 한 번 정보를 등록하고 스탬프 투어를 시작하는 초대 QR입니다.",
+      label: "행사 참가 등록",
+      link: `${window.location.origin}/join/${event.inviteToken}`,
+      filename: `${event.name}-초대-QR.png`,
+    });
+  }
+
+  function openStampQr(point: StampPoint) {
+    return openShareQr({
+      title: point.name,
+      kicker: "STAMP POINT QR · READY",
+      intro: "행사장에 비치할 지점 QR입니다. 등록된 참가자가 스캔하면 스탬프가 자동 저장됩니다.",
+      label: "스탬프 획득",
+      link: `${window.location.origin}/stamp/${point.token}`,
+      filename: `${point.name}-스탬프-QR.png`,
+    });
+  }
+
   const totalClubs = events.reduce((sum, event) => sum + event.clubs.length, 0);
-  const totalResponses = events.reduce((sum, event) => sum + event.responseCount, 0);
+  const totalParticipants = events.reduce((sum, event) => sum + event.participantCount, 0);
 
   return (
     <main className="admin-shell">
@@ -135,6 +216,7 @@ export default function AdminDashboard() {
         <nav className="side-nav" aria-label="관리자 메뉴">
           <a href="#overview" className="active"><span>⌂</span>대시보드</a>
           <a href="#clubs"><span>◫</span>행사 · 동아리</a>
+          <a href="#stamps"><span>⌗</span>스탬프 투어</a>
           <a href="#responses"><span>≡</span>응답 내역</a>
           <a href="#integration"><span>↔</span>연동 안내</a>
         </nav>
@@ -175,11 +257,13 @@ export default function AdminDashboard() {
                 <div>
                   <p className="eyebrow light"><span /> SELECTED EVENT</p>
                   <h2>{selected.name}</h2>
-                  <p>{formatDate(selected.eventDate)} · {selected.location || "장소 미정"} · {selected.institution}</p>
+                  <p>{formatPeriod(selected.startDate, selected.endDate)} · {selected.location || "장소 미정"} · {selected.institution}</p>
+                  {selected.description && <p className="spotlight-description">{selected.description}</p>}
                 </div>
-                <div className="spotlight-number"><strong>{selected.responseCount}</strong><span>현재 참여</span></div>
+                <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span></div>
                 <div className="spotlight-actions">
-                  <button onClick={() => setModal("club")}>동아리 추가 <span>＋</span></button>
+                  <button onClick={() => openEventQr(selected)}>초대 QR <span>⌗</span></button>
+                  <button onClick={() => setModal("stampPoint")}>스탬프 지점 <span>＋</span></button>
                   <a href={`/api/export?eventId=${selected.id}`}>엑셀용 CSV <span>↓</span></a>
                 </div>
               </div>
@@ -187,8 +271,8 @@ export default function AdminDashboard() {
               <div className="metric-grid">
                 <Metric label="전체 행사" value={events.length} note="누적 생성" symbol="◇" />
                 <Metric label="등록 동아리" value={totalClubs} note={`${selected.clubs.length}개 현재 행사`} symbol="◫" />
-                <Metric label="누적 응답" value={totalResponses} note="실시간 자동 저장" symbol="↗" />
-                <Metric label="입력 항목" value={3} note="이름 · 성별 · 연령" symbol="✓" />
+                <Metric label="행사 참가자" value={totalParticipants} note={`${selected.participantCount}명 현재 행사`} symbol="↗" />
+                <Metric label="스탬프 지점" value={selected.stampPoints.length} note="지점별 전용 QR" symbol="✓" />
               </div>
 
               <section className="dashboard-section" id="clubs">
@@ -200,7 +284,7 @@ export default function AdminDashboard() {
                   <div className="club-grid">
                     {selected.clubs.map((club, index) => (
                       <article className="club-card" key={club.id}>
-                        <div className="club-card-top"><span>{String(index + 1).padStart(2, "0")}</span><button onClick={() => openQr(club)} aria-label={`${club.name} QR 보기`}>⌗</button></div>
+                        <div className="club-card-top"><span>{String(index + 1).padStart(2, "0")}</span><button onClick={() => openClubQr(club)} aria-label={`${club.name} QR 보기`}>⌗</button></div>
                         <h3>{club.name}</h3>
                         <p>{club.description || "동아리 전용 참여 입력"}</p>
                         <div className="field-tags">
@@ -208,12 +292,36 @@ export default function AdminDashboard() {
                           {club.collectGender && <span>성별</span>}
                           {club.collectAge && <span>연령 구분</span>}
                         </div>
-                        <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button onClick={() => openQr(club)}>QR · 링크 보기 →</button></div>
+                        <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button onClick={() => openClubQr(club)}>QR · 링크 보기 →</button></div>
                       </article>
                     ))}
                   </div>
                 ) : (
                   <button className="empty-clubs" onClick={() => setModal("club")}><span>＋</span><strong>첫 동아리 추가</strong><small>받을 항목을 고르면 QR이 바로 만들어집니다.</small></button>
+                )}
+              </section>
+
+              <section className="dashboard-section" id="stamps">
+                <div className="dashboard-heading">
+                  <div><p>스탬프 투어</p><h2>행사장 QR 지점</h2></div>
+                  <div className="heading-actions">
+                    <button className="subtle-button" onClick={() => openEventQr(selected)}>초대 QR 보기</button>
+                    <button className="subtle-button" onClick={() => setModal("stampPoint")}>＋ 지점 추가</button>
+                  </div>
+                </div>
+                {selected.stampPoints.length ? (
+                  <div className="stamp-admin-grid">
+                    {selected.stampPoints.map((point, index) => (
+                      <article className="stamp-admin-card" key={point.id}>
+                        <div className="stamp-admin-number">{String(index + 1).padStart(2, "0")}</div>
+                        <div><h3>{point.name}</h3><p>{point.description || "현장에서 QR을 스캔해 방문을 인증합니다."}</p></div>
+                        <span className={point.active ? "active" : "inactive"}>{point.active ? "운영 중" : "비활성"}</span>
+                        <button onClick={() => openStampQr(point)}>QR 보기 · 저장 →</button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <button className="empty-clubs" onClick={() => setModal("stampPoint")}><span>⌗</span><strong>첫 스탬프 지점 추가</strong><small>지점마다 서로 다른 출력용 QR이 만들어집니다.</small></button>
                 )}
               </section>
 
@@ -245,7 +353,8 @@ export default function AdminDashboard() {
 
       {modal === "event" && <EventModal onClose={() => setModal(null)} onSubmit={createEvent} />}
       {modal === "club" && selected && <ClubModal eventName={selected.name} onClose={() => setModal(null)} onSubmit={createClub} />}
-      {modal === "qr" && qrClub && <QrModal club={qrClub} data={qrData} onClose={() => setModal(null)} onNotify={notify} />}
+      {modal === "stampPoint" && selected && <StampPointModal eventName={selected.name} onClose={() => setModal(null)} onSubmit={createStampPoint} />}
+      {modal === "qr" && shareQr && <QrModal qr={shareQr} data={qrData} onClose={() => setModal(null)} onNotify={notify} />}
       {toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}
     </main>
   );
@@ -257,14 +366,14 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <div className="empty-illustration"><span>＋</span><i /><i /><i /></div>
       <p className="eyebrow"><span /> READY TO START</p>
       <h2>첫 행사를 만들어 볼까요?</h2>
-      <p>행사를 만든 다음 그 안에 동아리를 추가하면, 동아리마다 전용 QR이 자동으로 생깁니다.</p>
+      <p>행사를 만들면 참가자 초대 QR이 바로 생기고, 동아리와 스탬프 지점을 원하는 만큼 추가할 수 있습니다.</p>
       <button className="button button-primary" onClick={onCreate}>새 행사 만들기 →</button>
     </section>
   );
 }
 
 function Metric({ label, value, note, symbol }: { label: string; value: number; note: string; symbol: string }) {
-  return <article className="metric-card"><div className="metric-icon">{symbol}</div><p>{label}</p><strong>{value.toLocaleString()}<small>{label.includes("응답") ? "명" : ""}</small></strong><span>{note}</span></article>;
+  return <article className="metric-card"><div className="metric-icon">{symbol}</div><p>{label}</p><strong>{value.toLocaleString()}<small>{label.includes("응답") || label.includes("참가자") ? "명" : ""}</small></strong><span>{note}</span></article>;
 }
 
 function AgeChart({ items, total }: { items: StatItem[]; total: number }) {
@@ -299,21 +408,39 @@ function ModalShell({ title, kicker, onClose, children }: { title: string; kicke
 
 function EventModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const today = new Date().toISOString().slice(0, 10);
-  return <ModalShell title="새 행사 만들기" kicker="STEP 01 · EVENT" onClose={onClose}><p className="modal-intro">큰 분류가 될 행사의 기본 정보를 입력해 주세요.</p><form className="modal-form" onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus placeholder="예: 2026 여름 공동체 주간" /></label><div className="form-row"><label>기관명<input name="institution" defaultValue="NCHM" /></label><label>행사 날짜<input name="eventDate" type="date" defaultValue={today} required /></label></div><label>장소<input name="location" placeholder="예: 본관 1층 대강당" /></label><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">행사 만들기 →</button></div></form></ModalShell>;
+  return <ModalShell title="새 행사 만들기" kicker="STEP 01 · EVENT" onClose={onClose}><p className="modal-intro">기본 정보를 입력하면 참가자 초대 QR이 자동으로 만들어집니다.</p><form className="modal-form" onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus placeholder="예: 2026 여름 공동체 주간" /></label><label>행사 설명 <small>선택</small><textarea name="description" rows={3} placeholder="참가자 화면에 보여줄 짧은 소개" /></label><div className="form-row"><label>시작일<input name="startDate" type="date" defaultValue={today} required /></label><label>종료일<input name="endDate" type="date" defaultValue={today} required /></label></div><div className="form-row"><label>기관명<input name="institution" defaultValue="NCHM" /></label><label>장소<input name="location" placeholder="예: 본관 1층" /></label></div><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">행사와 초대 QR 만들기 →</button></div></form></ModalShell>;
 }
 
 function ClubModal({ eventName, onClose, onSubmit }: { eventName: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   return <ModalShell title="동아리 추가" kicker="STEP 02 · CLUB" onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong> 안에 소분류와 전용 QR을 만듭니다. 이름은 모든 동아리에서 기본으로 받습니다.</p><form className="modal-form" onSubmit={onSubmit}><label>동아리명<input name="name" required autoFocus placeholder="예: 청년 찬양팀" /></label><label>안내 문구 <small>선택</small><input name="description" placeholder="입력 화면에 함께 보여줄 짧은 설명" /></label><fieldset><legend>추가로 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">동아리와 QR 만들기 →</button></div></form></ModalShell>;
 }
 
-function QrModal({ club, data, onClose, onNotify }: { club: Club; data: string; onClose: () => void; onNotify: (message: string) => void }) {
-  const link = typeof window === "undefined" ? "" : `${window.location.origin}/visit/${club.id}`;
-  async function copy() { await navigator.clipboard.writeText(link); onNotify("입력 링크를 복사했습니다."); }
-  return <ModalShell title={club.name} kicker="CLUB QR · READY" onClose={onClose}><p className="modal-intro">이 QR은 이 동아리의 입력 항목으로 바로 연결됩니다.</p><div className="qr-box">{data && <img src={data} alt={`${club.name} 참여 입력 QR 코드`} />}<span>이름{club.collectGender && " · 성별"}{club.collectAge && " · 연령 구분"}</span></div><div className="link-box"><span>{link}</span><button onClick={copy}>복사</button></div><div className="qr-actions"><a href={link} target="_blank" rel="noreferrer">입력 화면 보기 ↗</a><a className="button button-primary" href={data} download={`${club.name}-QR.png`}>QR 이미지 저장 ↓</a></div></ModalShell>;
+function StampPointModal({ eventName, onClose, onSubmit }: { eventName: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <ModalShell title="스탬프 지점 추가" kicker="STAMP TOUR · POINT" onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong> 행사장 안에 방문 지점과 전용 QR을 만듭니다.</p><form className="modal-form" onSubmit={onSubmit}><label>지점명<input name="name" required autoFocus maxLength={40} placeholder="예: 포토존" /></label><label>지점 설명 <small>선택</small><textarea name="description" rows={3} placeholder="참가자 진행 화면에 보여줄 안내" /></label><div className="modal-actions"><button type="button" onClick={onClose}>취소</button><button className="button button-primary" type="submit">지점과 QR 만들기 →</button></div></form></ModalShell>;
+}
+
+function QrModal({ qr, data, onClose, onNotify }: { qr: ShareQr; data: string; onClose: () => void; onNotify: (message: string) => void }) {
+  async function copy() { await navigator.clipboard.writeText(qr.link); onNotify("링크를 복사했습니다."); }
+  function printQr() {
+    const printWindow = window.open("", "_blank", "width=760,height=900");
+    if (!printWindow) return onNotify("팝업을 허용한 뒤 다시 인쇄해 주세요.");
+    printWindow.document.write(`<title>${escapeHtml(qr.title)} QR</title><style>body{font-family:system-ui;text-align:center;padding:40px;color:#123d37}img{width:min(80vw,560px)}h1{margin-bottom:8px}p{color:#667}</style><h1>${escapeHtml(qr.title)}</h1><p>${escapeHtml(qr.label)}</p><img src="${data}" onload="window.print()" alt="QR">`);
+    printWindow.document.close();
+  }
+  return <ModalShell title={qr.title} kicker={qr.kicker} onClose={onClose}><p className="modal-intro">{qr.intro}</p><div className="qr-box">{data && <img src={data} alt={`${qr.title} QR 코드`} />}<span>{qr.label}</span></div><div className="link-box"><span>{qr.link}</span><button onClick={copy}>복사</button></div><div className="qr-actions"><button className="qr-print-button" onClick={printQr}>QR 인쇄</button><a href={qr.link} target="_blank" rel="noreferrer">화면 보기 ↗</a><a className="button button-primary" href={data} download={qr.filename}>QR 이미지 저장 ↓</a></div></ModalShell>;
 }
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric" }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatPeriod(startDate: string, endDate: string) {
+  if (startDate === endDate) return formatDate(startDate);
+  return `${formatDate(startDate)} – ${formatDate(endDate)}`;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
 }
 
 function formatDateTime(value: string) {
