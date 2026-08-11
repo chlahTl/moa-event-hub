@@ -6,7 +6,7 @@ export default function Home() {
           <span className="brand-mark">ㅁ</span>
           <span>모아</span>
         </a>
-        <span className="institution-chip">NCHM 연계 행사 운영 시안</span>
+        <span className="institution-chip">베타버전</span>
         <a href="/admin" target="_top" className="text-link">관리자 화면 <span>↗</span></a>
       </nav>
 
@@ -32,17 +32,17 @@ export default function Home() {
         <div className="hero-visual" aria-label="행사에서 여러 동아리 입력으로 연결되는 구조">
           <div className="event-card-preview">
             <span className="preview-label">진행 중인 행사</span>
-            <h2>2026 여름 공동체 주간</h2>
+            <h2>2026 아로하</h2>
             <p>NCHM · 8월 12일</p>
-            <div className="preview-metric"><span>전체 참여</span><strong>128<small>명</small></strong></div>
+            <div className="preview-metric"><span>전체 참여</span><strong>138<small>명</small></strong></div>
           </div>
           <div className="branch-line branch-one" />
           <div className="branch-line branch-two" />
           <div className="branch-line branch-three" />
-          <div className="club-preview club-one"><i>01</i><div><strong>청년 찬양팀</strong><span>성별 · 연령 구분</span></div><b>⌗</b></div>
-          <div className="club-preview club-two"><i>02</i><div><strong>아동 미술반</strong><span>연령 구분</span></div><b>⌗</b></div>
-          <div className="club-preview club-three"><i>03</i><div><strong>환영 안내팀</strong><span>성별</span></div><b>⌗</b></div>
-          <div className="visual-caption"><span /> 동아리마다 받을 항목을 다르게</div>
+          <div className="club-preview club-one"><i>01</i><div><strong>알로하</strong><span>성별 · 연령 구분</span></div><b>⌗</b></div>
+          <div className="club-preview club-two"><i>02</i><div><strong>Queen</strong><span>연령 구분</span></div><b>⌗</b></div>
+          <div className="club-preview club-three"><i>03</i><div><strong>보름달</strong><span>성별 구분</span></div><b>⌗</b></div>
+          <div className="visual-caption"><span /> 동아리마다 받을 항목을 다르게 (동일하게도 가능합니다~!) </div>
         </div>
       </section>
 
@@ -60,7 +60,7 @@ export default function Home() {
 
       <footer className="landing-footer">
         <div className="brand-lockup"><span className="brand-mark">ㅁ</span><span>모아</span></div>
-        <p>NCHM 관련 행사 운영을 위한 독립형 1차 시안</p>
+        <p>1차 시안</p>
         <a href="/admin" target="_top">관리자 화면 시작하기 →</a>
       </footer>
     </main>

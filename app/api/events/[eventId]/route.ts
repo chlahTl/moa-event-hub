@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { authorizeAdminRequest } from "../../../chatgpt-auth";
+import { authorizeAdminRequest } from "../../../auth";
 import { ensureDatabase, getDb } from "../../../../db";
 import { events } from "../../../../db/schema";
 import { apiError, internalApiError, isUuid, readJsonObject, stringField } from "../../../../lib/api-response";
@@ -11,7 +11,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ eventId: string }> },
 ) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -27,7 +27,10 @@ export async function PATCH(
 
     await ensureDatabase();
     const db = getDb();
-    const [current] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+    const [current] = await db.select().from(events).where(and(
+      eq(events.id, eventId),
+      eq(events.ownerUserId, authorization.user.id),
+    )).limit(1);
     if (!current) return apiError("행사를 찾을 수 없습니다.", 404);
     if (current.deletedAt) return apiError("휴지통에 있는 행사는 복구한 뒤 수정해 주세요.", 409);
 
@@ -64,7 +67,11 @@ export async function PATCH(
       location,
       status,
       updatedAt: new Date().toISOString(),
-    }).where(and(eq(events.id, eventId), isNull(events.deletedAt))).returning();
+    }).where(and(
+      eq(events.id, eventId),
+      eq(events.ownerUserId, authorization.user.id),
+      isNull(events.deletedAt),
+    )).returning();
     if (!event) return apiError("행사 상태가 변경되었습니다. 새로고침 후 다시 시도해 주세요.", 409);
 
     await writeAdminAuditLog({
@@ -84,7 +91,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ eventId: string }> },
 ) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -92,7 +99,10 @@ export async function DELETE(
     if (!isUuid(eventId)) return apiError("행사 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
-    const [current] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+    const [current] = await db.select().from(events).where(and(
+      eq(events.id, eventId),
+      eq(events.ownerUserId, authorization.user.id),
+    )).limit(1);
     if (!current) return apiError("행사를 찾을 수 없습니다.", 404);
     const impact = await getEventDeletionImpact(eventId);
     if (current.deletedAt) {
@@ -109,9 +119,16 @@ export async function DELETE(
       deletedAt: now,
       deletedBy: authorization.user.email,
       updatedAt: now,
-    }).where(and(eq(events.id, eventId), isNull(events.deletedAt))).returning();
+    }).where(and(
+      eq(events.id, eventId),
+      eq(events.ownerUserId, authorization.user.id),
+      isNull(events.deletedAt),
+    )).returning();
     if (!event) {
-      const [latest] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+      const [latest] = await db.select().from(events).where(and(
+        eq(events.id, eventId),
+        eq(events.ownerUserId, authorization.user.id),
+      )).limit(1);
       if (latest?.deletedAt) {
         return Response.json({
           deleted: true,

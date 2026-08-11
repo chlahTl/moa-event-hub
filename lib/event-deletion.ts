@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   adminAuditLogs,
@@ -10,7 +10,7 @@ import {
   stampPoints,
   stampRecords,
 } from "../db/schema";
-import type { ChatGPTUser } from "../app/chatgpt-auth";
+import type { AppUser } from "../app/auth";
 
 export type EventDeletionImpact = {
   clubCount: number;
@@ -47,7 +47,7 @@ export async function writeAdminAuditLog(input: {
   eventId: string | null;
   eventName: string;
   action: string;
-  user: ChatGPTUser;
+  user: AppUser;
   details?: Record<string, unknown>;
 }) {
   await getDb().insert(adminAuditLogs).values({
@@ -64,7 +64,8 @@ export async function writeAdminAuditLog(input: {
 export async function permanentlyDeleteEvent(input: {
   eventId: string;
   eventName: string;
-  user: ChatGPTUser;
+  user: AppUser;
+  ownerUserId: string;
   impact: EventDeletionImpact;
 }) {
   const db = getDb();
@@ -75,7 +76,10 @@ export async function permanentlyDeleteEvent(input: {
     db.delete(stampPoints).where(eq(stampPoints.eventId, input.eventId)),
     db.delete(participants).where(eq(participants.eventId, input.eventId)),
     db.delete(clubs).where(eq(clubs.eventId, input.eventId)),
-    db.delete(events).where(eq(events.id, input.eventId)),
+    db.delete(events).where(and(
+      eq(events.id, input.eventId),
+      eq(events.ownerUserId, input.ownerUserId),
+    )),
     db.insert(adminAuditLogs).values({
       // A deterministic id makes a concurrently retried permanent deletion
       // collapse safely instead of writing duplicate completion records.

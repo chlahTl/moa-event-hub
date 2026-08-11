@@ -25,7 +25,7 @@ type TourData = {
   successMessage: string;
 };
 
-const GENDERS = ["여성", "남성", "응답하지 않음"];
+const GENDERS = ["남성", "여성"];
 const AGES = [
   { value: "유아", detail: "8세 이하" },
   { value: "초등", detail: "9~13세" },
@@ -33,6 +33,7 @@ const AGES = [
   { value: "고등", detail: "17~19세" },
   { value: "청년", detail: "20~24세" },
   { value: "후기", detail: "25~39세" },
+  { value: "일반", detail: "40세 이상" },
 ];
 
 export default function EventTour({ inviteToken }: { inviteToken: string }) {

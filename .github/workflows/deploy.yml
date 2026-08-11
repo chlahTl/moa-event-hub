@@ -44,6 +44,7 @@ jobs:
           {
             echo "## 모아 검증 완료"
             echo
-            echo "관리자 인증은 Sites가 제공하는 ChatGPT 로그인 계층을 사용합니다."
+            echo "관리자 인증은 앱의 Google OAuth와 D1 서버 세션을 사용합니다."
+            echo "Sites는 호스팅, 데이터베이스 연결, 운영 비밀변수 보관을 담당합니다."
             echo "운영 데이터베이스 마이그레이션과 배포는 별도 승인된 Sites 배포에서 진행합니다."
           } >> "$GITHUB_STEP_SUMMARY"

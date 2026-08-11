@@ -50,13 +50,14 @@ npm run lint
 
 ## 관리자 인증과 배포
 
-- `/admin`과 행사·동아리·추가 지점·통계·CSV 관리 API는 ChatGPT 로그인과 서버 측 이메일 허용 목록을 모두 확인합니다.
-- 현재 관리자 허용 계정은 `choewonhyeog387@gmail.com`입니다.
-- 인증 헤더를 사용자가 직접 보낼 수 있는 `*.workers.dev` 주소에서는 관리자 인증을 의도적으로 거부합니다.
+- `/admin`과 행사·동아리·추가 지점·통계·CSV 관리 API는 Google OAuth 로그인과 서버 세션을 확인합니다.
+- 행사에는 소유자 계정이 저장되며 모든 관리 API는 로그인 사용자가 소유한 행사만 조회·수정·삭제합니다.
+- 기존 소유자 정보가 없던 행사는 최초 Google 로그인 시 기존 관리자 계정에 자동 귀속됩니다.
+- `GOOGLE_CLIENT_ID`와 `GOOGLE_CLIENT_SECRET`은 소스가 아닌 Sites 런타임 비밀변수로 등록합니다.
 - 운영 배포는 `.openai/hosting.json`에 연결된 Sites를 통해 진행해야 합니다. GitHub Actions는 lint, 테스트, production build만 검증하며 운영 DB나 배포 상태를 변경하지 않습니다.
-- 스키마 변경은 `drizzle/0005_red_maverick.sql`에 포함되어 있습니다. 운영 D1 적용과 Sites 배포는 데이터에 영향을 주므로 명시적인 승인 후에만 실행합니다.
+- 사용자·OAuth 계정·서버 세션·행사 소유권 스키마는 `drizzle/0006_remarkable_gressill.sql`에 포함되어 있습니다. 운영 D1 적용과 Sites 배포는 데이터에 영향을 주므로 명시적인 승인 후에만 실행합니다.
 
-일반 공개 화면과 QR 흐름은 로컬에서 확인할 수 있습니다. 관리자 로그인 전체 흐름은 dispatcher가 제공하는 ChatGPT 로그인 경로가 있는 Sites 환경에서 확인하세요.
+일반 공개 화면과 QR 흐름은 로그인 없이 사용할 수 있습니다. 관리자 로그인 전체 흐름은 Google OAuth 콜백이 등록된 운영 주소에서 확인하세요.
 
 ## 주요 데이터 구조
 

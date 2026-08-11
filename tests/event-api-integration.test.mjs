@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { after, test } from "node:test";
+import { after, before, test } from "node:test";
 
 import {
-  adminHeaders,
   D1DatabaseMock,
   workerEnvironment,
 } from "./d1-mock.mjs";
@@ -10,6 +9,10 @@ import {
 const database = new D1DatabaseMock();
 globalThis.__moaTestCloudflareEnv = workerEnvironment(database);
 const MISSING_EVENT_ID = "00000000-0000-4000-8000-000000000001";
+const ADMIN_USER_ID = "admin-user-1";
+const ADMIN_SESSION = "admin-session-token";
+const OTHER_USER_ID = "admin-user-2";
+const OTHER_SESSION = "other-session-token";
 
 const [
   eventsRoute,
@@ -25,6 +28,8 @@ const [
   claimRoute,
   statsRoute,
   exportRoute,
+  adminAuth,
+  databaseModule,
 ] = await Promise.all([
   import("../app/api/events/route.ts"),
   import("../app/api/events/[eventId]/route.ts"),
@@ -39,7 +44,26 @@ const [
   import("../app/api/stamps/claim/route.ts"),
   import("../app/api/stats/route.ts"),
   import("../app/api/export/route.ts"),
+  import("../app/auth.ts"),
+  import("../db/index.ts"),
 ]);
+
+before(async () => {
+  await databaseModule.ensureDatabase();
+  for (const [id, name, email, sessionId, token] of [
+    [ADMIN_USER_ID, "테스트 관리자", "choewonhyeog387@gmail.com", "session-admin", ADMIN_SESSION],
+    [OTHER_USER_ID, "다른 관리자", "other@example.com", "session-other", OTHER_SESSION],
+  ]) {
+    database.sqlite.prepare(`
+      INSERT INTO users (id, display_name, email, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(id, name, email);
+    database.sqlite.prepare(`
+      INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, last_seen_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(sessionId, id, await adminAuth.sha256Hex(token), "2099-01-01T00:00:00.000Z");
+  }
+});
 
 after(() => {
   database.close();
@@ -48,7 +72,12 @@ after(() => {
 
 function request(path, options = {}) {
   const headers = options.admin
-    ? adminHeaders(options.headers)
+    ? {
+        "content-type": "application/json",
+        cookie: `${adminAuth.ADMIN_SESSION_COOKIE}=${options.sessionToken ?? ADMIN_SESSION}`,
+        origin: "http://localhost",
+        ...options.headers,
+      }
     : { "content-type": "application/json", ...options.headers };
   return new Request(`http://localhost${path}`, {
     method: options.method ?? "GET",
@@ -117,6 +146,18 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   const event = createdEvent.event;
   assert.ok(event.id);
   assert.ok(event.inviteToken);
+  assert.equal(event.ownerUserId, ADMIN_USER_ID);
+
+  const otherUsersEvents = await json(await eventsRoute.GET(request("/api/events", {
+    admin: true,
+    sessionToken: OTHER_SESSION,
+  })), 200);
+  assert.deepEqual(otherUsersEvents.events, []);
+  const crossAccountStats = await statsRoute.GET(request(`/api/stats?eventId=${event.id}`, {
+    admin: true,
+    sessionToken: OTHER_SESSION,
+  }));
+  assert.equal(crossAccountStats.status, 404);
 
   const createdClub = await json(await clubsRoute.POST(request("/api/clubs", {
     method: "POST",

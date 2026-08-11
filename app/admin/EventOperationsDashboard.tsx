@@ -542,8 +542,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
           <a href="#integration"><span>↔</span>연동 안내</a>
         </nav>
         <div className="sidebar-help">
-          <span className="status-dot" /> 독립 운영 중
-          <p>NCHM Visite와 연결하지 않아도 바로 사용할 수 있습니다.</p>
+          <span className="status-dot" /> 베타버전
+          <p>베타버전 운영테스트중 123123 .</p>
         </div>
         <a href="/" target="_top" className="back-link">← 소개 화면으로</a>
       </aside>
@@ -678,8 +678,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
 
               <section className="integration-card" id="integration">
                 <div className="integration-icon">↔</div>
-                <div><span>연동 준비</span><h2>NCHM Visite는 나중에 연결할 수 있습니다.</h2><p>현재는 독립적으로 안전하게 운영하고, 추후 Visite가 제공하는 API 또는 정기 CSV 가져오기 방식에 맞춰 연결합니다.</p></div>
-                <div className="integration-route"><small>현재 권장 흐름</small><strong>모아 저장소</strong><i>→</i><strong>CSV / REST API</strong><i>→</i><strong>NCHM Visite</strong></div>
+                <div><span>연동 준비중</span><h2>개발중</h2><p>현재는 독립적으로 안전하게 운영중</p></div>
+                <div className="integration-route"><small>현재 권장 흐름</small><strong>확인</strong><i>→</i><strong>수정</strong><i>→</i><strong></strong></div>
               </section>
             </div>
           )}

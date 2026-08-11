@@ -142,17 +142,6 @@ function findTopLevelFrom(sql, startIndex) {
   return -1;
 }
 
-export function adminHeaders(extra = {}) {
-  return {
-    "content-type": "application/json",
-    host: "localhost",
-    origin: "http://localhost",
-    "oai-authenticated-user-id": "admin-user-1",
-    "oai-authenticated-user-email": "choewonhyeog387@gmail.com",
-    ...extra,
-  };
-}
-
 export function workerEnvironment(db) {
   return {
     DB: db,

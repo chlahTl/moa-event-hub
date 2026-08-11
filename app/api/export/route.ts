@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { clubs, events, responses } from "../../../db/schema";
-import { authorizeAdminRequest } from "../../chatgpt-auth";
+import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
 function csvCell(value: string | null) {
@@ -13,7 +13,7 @@ function csvCell(value: string | null) {
 }
 
 export async function GET(request: Request) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     await ensureDatabase();
     const db = getDb();
     const [event] = await db.select({ id: events.id }).from(events)
-      .where(and(eq(events.id, eventId), isNull(events.deletedAt))).limit(1);
+      .where(and(eq(events.id, eventId), eq(events.ownerUserId, authorization.user.id), isNull(events.deletedAt))).limit(1);
     if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
     const rows = await db
       .select({

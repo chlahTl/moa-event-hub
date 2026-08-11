@@ -2,11 +2,11 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { events, stampPoints } from "../../../db/schema";
 import { createPublicToken } from "../../../lib/participant-session";
-import { authorizeAdminRequest } from "../../chatgpt-auth";
+import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid, readJsonObject, stringField } from "../../../lib/api-response";
 
 export async function GET(request: Request) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     await ensureDatabase();
     const db = getDb();
     const [event] = await db.select({ id: events.id }).from(events)
-      .where(and(eq(events.id, eventId), isNull(events.deletedAt))).limit(1);
+      .where(and(eq(events.id, eventId), eq(events.ownerUserId, authorization.user.id), isNull(events.deletedAt))).limit(1);
     if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
     const points = await db
       .select()
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const db = getDb();
     const [event] = await db.select({ id: events.id }).from(events)
-      .where(and(eq(events.id, eventId), isNull(events.deletedAt))).limit(1);
+      .where(and(eq(events.id, eventId), eq(events.ownerUserId, authorization.user.id), isNull(events.deletedAt))).limit(1);
     if (!event) return Response.json({ error: "행사를 찾을 수 없습니다." }, { status: 404 });
     const [lastPosition] = await db
       .select({ value: sql<number>`coalesce(max(${stampPoints.position}), 0)` })

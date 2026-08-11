@@ -3,6 +3,7 @@ import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqli
 
 export const events = sqliteTable("events", {
   id: text("id").primaryKey(),
+  ownerUserId: text("owner_user_id"),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   institution: text("institution").notNull().default("NCHM"),
@@ -18,7 +19,48 @@ export const events = sqliteTable("events", {
   deletedBy: text("deleted_by"),
 }, (table) => [
   uniqueIndex("events_invite_token_unique").on(table.inviteToken),
+  index("idx_events_owner_deleted_date").on(table.ownerUserId, table.deletedAt, table.eventDate),
   index("idx_events_deleted_event_date").on(table.deletedAt, table.eventDate),
+]);
+
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  displayName: text("display_name").notNull(),
+  email: text("email").notNull(),
+  avatarUrl: text("avatar_url"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("idx_users_email").on(table.email),
+]);
+
+export const oauthAccounts = sqliteTable("oauth_accounts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  providerAccountId: text("provider_account_id").notNull(),
+  email: text("email").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("oauth_accounts_provider_subject_unique").on(table.provider, table.providerAccountId),
+  index("idx_oauth_accounts_user_id").on(table.userId),
+]);
+
+export const authSessions = sqliteTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("auth_sessions_token_hash_unique").on(table.tokenHash),
+  index("idx_auth_sessions_user_expires").on(table.userId, table.expiresAt),
 ]);
 
 export const adminAuditLogs = sqliteTable("admin_audit_logs", {

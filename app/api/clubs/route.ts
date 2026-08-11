@@ -1,11 +1,11 @@
 import { ensureDatabase, getDb } from "../../../db";
 import { clubs, events } from "../../../db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { authorizeAdminRequest } from "../../chatgpt-auth";
+import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid, readJsonObject, stringField } from "../../../lib/api-response";
 
 export async function POST(request: Request) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -39,7 +39,11 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const db = getDb();
     const parent = await db.select({ id: events.id }).from(events)
-      .where(and(eq(events.id, eventId), isNull(events.deletedAt))).limit(1);
+      .where(and(
+        eq(events.id, eventId),
+        eq(events.ownerUserId, authorization.user.id),
+        isNull(events.deletedAt),
+      )).limit(1);
     if (!parent.length) return apiError("행사를 찾을 수 없습니다.", 404);
 
     const [club] = await db

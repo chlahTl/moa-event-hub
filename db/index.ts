@@ -18,6 +18,7 @@ export async function ensureDatabase() {
   await env.DB.batch([
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY NOT NULL,
+      owner_user_id TEXT,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       institution TEXT NOT NULL DEFAULT 'NCHM',
@@ -31,6 +32,31 @@ export async function ensureDatabase() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       deleted_at TEXT,
       deleted_by TEXT
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY NOT NULL,
+      display_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      avatar_url TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS oauth_accounts (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      provider_account_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
       id TEXT PRIMARY KEY NOT NULL,
@@ -136,6 +162,21 @@ export async function ensureDatabase() {
     env.DB.prepare(
       "CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_actor_created ON admin_audit_logs(actor_email, created_at)",
     ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+    ),
+    env.DB.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS oauth_accounts_provider_subject_unique ON oauth_accounts(provider, provider_account_id)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_oauth_accounts_user_id ON oauth_accounts(user_id)",
+    ),
+    env.DB.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_token_hash_unique ON auth_sessions(token_hash)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_expires ON auth_sessions(user_id, expires_at)",
+    ),
   ]);
 
   const eventColumns = await env.DB.prepare("PRAGMA table_info(events)").all<{
@@ -143,6 +184,7 @@ export async function ensureDatabase() {
   }>();
   const eventColumnNames = new Set(eventColumns.results.map((column) => column.name));
   const missingEventColumns = [
+    ["owner_user_id", "ALTER TABLE events ADD COLUMN owner_user_id TEXT"],
     ["description", "ALTER TABLE events ADD COLUMN description TEXT NOT NULL DEFAULT ''"],
     ["start_date", "ALTER TABLE events ADD COLUMN start_date TEXT"],
     ["end_date", "ALTER TABLE events ADD COLUMN end_date TEXT"],
@@ -159,6 +201,9 @@ export async function ensureDatabase() {
   ).run();
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_events_deleted_event_date ON events(deleted_at, event_date)",
+  ).run();
+  await env.DB.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_events_owner_deleted_date ON events(owner_user_id, deleted_at, event_date)",
   ).run();
 
   const clubColumns = await env.DB.prepare("PRAGMA table_info(clubs)").all<{

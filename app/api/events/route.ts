@@ -1,5 +1,5 @@
-import { count, desc, inArray, isNotNull, isNull } from "drizzle-orm";
-import { authorizeAdminRequest } from "../../chatgpt-auth";
+import { and, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { authorizeAdminRequest } from "../../auth";
 import { ensureDatabase, getDb } from "../../../db";
 import { clubs, events, participants, responses, stampPoints } from "../../../db/schema";
 import { apiError, internalApiError, readJsonObject, stringField } from "../../../lib/api-response";
@@ -10,7 +10,7 @@ const EVENT_STATUSES = new Set(["active", "inactive", "archived"]);
 const PRIVATE_NO_STORE = { "Cache-Control": "no-store, private" };
 
 export async function GET(request: Request) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -24,7 +24,10 @@ export async function GET(request: Request) {
     const eventRows = await db
       .select()
       .from(events)
-      .where(view === "trash" ? isNotNull(events.deletedAt) : isNull(events.deletedAt))
+      .where(and(
+        eq(events.ownerUserId, authorization.user.id),
+        view === "trash" ? isNotNull(events.deletedAt) : isNull(events.deletedAt),
+      ))
       .orderBy(desc(events.eventDate), desc(events.createdAt));
     if (!eventRows.length) {
       return Response.json({ events: [] }, { headers: PRIVATE_NO_STORE });
@@ -70,7 +73,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -106,6 +109,7 @@ export async function POST(request: Request) {
       .insert(events)
       .values({
         id,
+        ownerUserId: authorization.user.id,
         name,
         description,
         institution,

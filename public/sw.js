@@ -1,4 +1,4 @@
-const CACHE_NAME = "moa-shell-v4";
+const CACHE_NAME = "moa-shell-v5";
 const STATIC_PATHS = ["/"];
 
 self.addEventListener("install", (event) => {
@@ -21,11 +21,10 @@ self.addEventListener("fetch", (event) => {
   const isAdminRequest = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
   const isApiRequest = url.pathname === "/api" || url.pathname.startsWith("/api/");
   const isAuthRequest =
-    url.pathname === "/signin-with-chatgpt" ||
-    url.pathname === "/signout-with-chatgpt" ||
-    url.pathname === "/callback";
+    url.pathname === "/signin" ||
+    url.pathname.startsWith("/api/auth/");
 
-  // Never serve identity-aware pages, dispatcher-owned authentication routes,
+  // Never serve identity-aware pages, application-owned authentication routes,
   // or API data from the service-worker cache. `no-store` also bypasses the
   // browser's HTTP cache for these calls.
   if (isAdminRequest || isApiRequest || isAuthRequest) {

@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { authorizeAdminRequest } from "../../../../chatgpt-auth";
+import { and, eq } from "drizzle-orm";
+import { authorizeAdminRequest } from "../../../../auth";
 import { ensureDatabase, getDb } from "../../../../../db";
 import { events } from "../../../../../db/schema";
 import { apiError, internalApiError, isUuid } from "../../../../../lib/api-response";
@@ -9,14 +9,17 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ eventId: string }> },
 ) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
     const { eventId } = await context.params;
     if (!isUuid(eventId)) return apiError("행사 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
-    const [event] = await getDb().select({ id: events.id }).from(events).where(eq(events.id, eventId)).limit(1);
+    const [event] = await getDb().select({ id: events.id }).from(events).where(and(
+      eq(events.id, eventId),
+      eq(events.ownerUserId, authorization.user.id),
+    )).limit(1);
     if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
     return Response.json(
       { impact: await getEventDeletionImpact(eventId) },

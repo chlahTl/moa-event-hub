@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../../db";
 import { clubs, events } from "../../../../db/schema";
-import { authorizeAdminRequest } from "../../../chatgpt-auth";
+import { authorizeAdminRequest } from "../../../auth";
 import { apiError, internalApiError, isUuid, readJsonObject, stringField } from "../../../../lib/api-response";
 
 export async function GET(
@@ -44,7 +44,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ clubId: string }> },
 ) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -56,7 +56,11 @@ export async function PATCH(
     const db = getDb();
     const [existing] = await db.select({ club: clubs }).from(clubs)
       .innerJoin(events, eq(clubs.eventId, events.id))
-      .where(and(eq(clubs.id, clubId), isNull(events.deletedAt))).limit(1);
+      .where(and(
+        eq(clubs.id, clubId),
+        eq(events.ownerUserId, authorization.user.id),
+        isNull(events.deletedAt),
+      )).limit(1);
     if (!existing) return apiError("동아리를 찾을 수 없습니다.", 404);
     const name = body.name === undefined ? existing.club.name : stringField(body, "name");
     const description = body.description === undefined
@@ -114,7 +118,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ clubId: string }> },
 ) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -124,7 +128,11 @@ export async function DELETE(
     const db = getDb();
     const [existing] = await db.select({ id: clubs.id }).from(clubs)
       .innerJoin(events, eq(clubs.eventId, events.id))
-      .where(and(eq(clubs.id, clubId), isNull(events.deletedAt))).limit(1);
+      .where(and(
+        eq(clubs.id, clubId),
+        eq(events.ownerUserId, authorization.user.id),
+        isNull(events.deletedAt),
+      )).limit(1);
     if (!existing) return apiError("동아리를 찾을 수 없습니다.", 404);
     const deleted = await db.delete(clubs).where(eq(clubs.id, clubId)).returning({ id: clubs.id });
     if (!deleted.length) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });

@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { authorizeAdminRequest } from "../../../../chatgpt-auth";
+import { authorizeAdminRequest } from "../../../../auth";
 import { ensureDatabase, getDb } from "../../../../../db";
 import { adminAuditLogs, events } from "../../../../../db/schema";
 import { apiError, internalApiError, isUuid, readJsonObject, stringField } from "../../../../../lib/api-response";
@@ -9,7 +9,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ eventId: string }> },
 ) {
-  const authorization = authorizeAdminRequest(request);
+  const authorization = await authorizeAdminRequest(request);
   if (!authorization.authorized) return authorization.response;
 
   try {
@@ -20,9 +20,12 @@ export async function DELETE(
     const confirmationName = stringField(body, "confirmationName");
     await ensureDatabase();
     const db = getDb();
-    const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
+    const [event] = await db.select().from(events).where(and(
+      eq(events.id, eventId),
+      eq(events.ownerUserId, authorization.user.id),
+    )).limit(1);
     if (!event) {
-      const audit = await findPermanentDeletionAudit(eventId);
+      const audit = await findPermanentDeletionAudit(eventId, authorization.user.id);
       if (!audit) return apiError("행사를 찾을 수 없습니다.", 404);
       if (confirmationName !== audit.eventName.normalize("NFKC").trim()) {
         return apiError("행사명을 정확히 입력해 주세요.", 400);
@@ -45,12 +48,13 @@ export async function DELETE(
         eventId,
         eventName: event.name,
         user: authorization.user,
+        ownerUserId: authorization.user.id,
         impact,
       });
     } catch {
       // A matching completion audit means another identical request won the
       // race and the desired state was reached successfully.
-      const audit = await findPermanentDeletionAudit(eventId);
+      const audit = await findPermanentDeletionAudit(eventId, authorization.user.id);
       if (audit && confirmationName === audit.eventName.normalize("NFKC").trim()) {
         return Response.json({
           deleted: true,
@@ -67,13 +71,14 @@ export async function DELETE(
   }
 }
 
-async function findPermanentDeletionAudit(eventId: string) {
+async function findPermanentDeletionAudit(eventId: string, actorUserId: string) {
   const [audit] = await getDb().select({
     eventName: adminAuditLogs.eventName,
     details: adminAuditLogs.details,
   }).from(adminAuditLogs).where(and(
     eq(adminAuditLogs.eventId, eventId),
     eq(adminAuditLogs.action, "event.permanently_deleted"),
+    eq(adminAuditLogs.actorUserId, actorUserId),
   )).orderBy(desc(adminAuditLogs.createdAt)).limit(1);
   return audit ?? null;
 }

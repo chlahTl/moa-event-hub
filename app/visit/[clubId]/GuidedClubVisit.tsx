@@ -25,7 +25,7 @@ type ClubStampResult = {
   progress: { completed: number; total: number };
 };
 
-const GENDERS = ["여성", "남성", "응답하지 않음"];
+const GENDERS = ["여성", "남성"];
 const AGES = [
   { value: "유아", detail: "8세 이하" },
   { value: "초등", detail: "9~13세" },
@@ -33,6 +33,7 @@ const AGES = [
   { value: "고등", detail: "17~19세" },
   { value: "청년", detail: "20~24세" },
   { value: "후기", detail: "25~39세" },
+  { value: "일반", detail: "40세 이상" },
 ];
 
 export default function VisitForm({ clubId }: { clubId: string }) {
@@ -130,7 +131,7 @@ export default function VisitForm({ clubId }: { clubId: string }) {
                 autoComplete="name"
                 autoCapitalize="words"
                 maxLength={30}
-                placeholder="예: 김모아"
+                placeholder="예: 홍길동"
                 required
                 autoFocus
               />
@@ -160,7 +161,8 @@ export default function VisitForm({ clubId }: { clubId: string }) {
             {status === "submitting" ? "참여 정보를 보내고 있어요…" : canSubmit ? "다 적었어요 · 참여하기 →" : "위 내용을 모두 입력해 주세요"}
           </button>
         </form>
-        <p className="visit-footer-note">제출하면 이 동아리의 참여 실적으로 기록됩니다.</p>
+        <p className="visit-footer-note">제출시 동아리 참가가 가능합니다
+        </p>
       </section>
     </main>
   );
