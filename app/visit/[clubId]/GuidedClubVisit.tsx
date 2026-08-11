@@ -185,7 +185,7 @@ function ClubStampSuccess({ result, institution }: { result: ClubStampResult; in
 }
 
 function LoadingVisit() {
-  return <main className="visit-shell visit-center"><div className="visit-loader" /><strong>입력 화면을 준비하고 있습니다.</strong></main>;
+  return <main className="visit-shell visit-center"><div className="visit-loader" /><strong>입력 화면을 불러오고 있습니다.</strong></main>;
 }
 
 function VisitError({ message }: { message: string }) {

@@ -6,7 +6,7 @@ export default function Home() {
           <span className="brand-mark">ㅁ</span>
           <span>모아</span>
         </a>
-        <span className="institution-chip">베타버전</span>
+        <span className="nav-context">행사 운영 도구</span>
         <a href="/admin" target="_top" className="text-link">관리자 화면 <span>↗</span></a>
       </nav>
 
@@ -31,18 +31,18 @@ export default function Home() {
 
         <div className="hero-visual" aria-label="행사에서 여러 동아리 입력으로 연결되는 구조">
           <div className="event-card-preview">
-            <span className="preview-label">진행 중인 행사</span>
-            <h2>2026 아로하</h2>
-            <p>NCHM · 8월 12일</p>
-            <div className="preview-metric"><span>전체 참여</span><strong>138<small>명</small></strong></div>
+            <span className="preview-label">행사 관리</span>
+            <h2>참여 현황</h2>
+            <p>일정 · 장소 · 응답을 한곳에서</p>
+            <div className="preview-metric"><span>참가자 응답</span><strong>자동 집계</strong></div>
           </div>
           <div className="branch-line branch-one" />
           <div className="branch-line branch-two" />
           <div className="branch-line branch-three" />
-          <div className="club-preview club-one"><i>01</i><div><strong>알로하</strong><span>성별 · 연령 구분</span></div><b>⌗</b></div>
-          <div className="club-preview club-two"><i>02</i><div><strong>Queen</strong><span>연령 구분</span></div><b>⌗</b></div>
-          <div className="club-preview club-three"><i>03</i><div><strong>보름달</strong><span>성별 구분</span></div><b>⌗</b></div>
-          <div className="visual-caption"><span /> 동아리마다 받을 항목을 다르게 (동일하게도 가능합니다~!) </div>
+          <div className="club-preview club-one"><i>01</i><div><strong>참여 QR</strong><span>필요한 항목만 수집</span></div><b>⌗</b></div>
+          <div className="club-preview club-two"><i>02</i><div><strong>자동 분류</strong><span>행사 · 동아리별 정리</span></div><b>≡</b></div>
+          <div className="club-preview club-three"><i>03</i><div><strong>자료 내보내기</strong><span>CSV 파일로 저장</span></div><b>↓</b></div>
+          <div className="visual-caption"><span /> 행사 생성부터 현장 참여 기록까지 하나의 흐름으로 관리합니다.</div>
         </div>
       </section>
 
@@ -52,15 +52,15 @@ export default function Home() {
           <h2>수기 입력을<br />세 단계로 줄입니다.</h2>
         </div>
         <div className="flow-grid">
-          <article><span>01</span><div className="flow-icon">＋</div><h3>큰 행사를 만듭니다</h3><p>행사명, 기관명, 날짜와 장소를 한 번만 입력합니다.</p></article>
-          <article><span>02</span><div className="flow-icon">⌘</div><h3>동아리를 나눕니다</h3><p>동아리별로 성별 또는 연령 구분 중 필요한 항목만 선택합니다.</p></article>
-          <article><span>03</span><div className="flow-icon">↧</div><h3>자동으로 모읍니다</h3><p>QR 응답이 동아리와 행사에 맞게 저장되고 엑셀용 파일로 정리됩니다.</p></article>
+          <article><span>01</span><div className="flow-icon">＋</div><h3>행사를 등록합니다</h3><p>행사명, 기관명, 날짜와 장소를 한 번 입력해 운영 기준을 만듭니다.</p></article>
+          <article><span>02</span><div className="flow-icon">⌘</div><h3>참여 항목을 구성합니다</h3><p>동아리마다 필요한 정보만 선택하고 전용 QR을 발급합니다.</p></article>
+          <article><span>03</span><div className="flow-icon">↧</div><h3>응답을 확인합니다</h3><p>참여 기록을 행사와 동아리별로 확인하고 CSV 파일로 내려받습니다.</p></article>
         </div>
       </section>
 
       <footer className="landing-footer">
         <div className="brand-lockup"><span className="brand-mark">ㅁ</span><span>모아</span></div>
-        <p>1차 시안</p>
+        <p>행사 운영과 참여 기록을 한곳에</p>
         <a href="/admin" target="_top">관리자 화면 시작하기 →</a>
       </footer>
     </main>

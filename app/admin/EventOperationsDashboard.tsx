@@ -339,7 +339,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       notify("새 행사를 만들었습니다.");
       await openShareQr({
         title: data.event.name,
-        kicker: "EVENT INVITE QR · READY",
+        kicker: "EVENT INVITE QR",
         intro: "참가자가 처음 스캔해 행사 정보와 이름을 등록하는 초대 QR입니다.",
         label: "행사 참가 등록",
         link: `${window.location.origin}/join/${data.event.inviteToken}`,
@@ -491,7 +491,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   function openClubQr(club: Club) {
     return openShareQr({
       title: club.name,
-      kicker: "CLUB QR · READY",
+      kicker: "CLUB PARTICIPATION QR",
       intro: "행사 참가자가 스캔하면 이름을 다시 묻지 않고 이 동아리의 참여 스탬프가 자동 등록됩니다.",
       label: `기본 스탬프 · ${club.name}`,
       link: `${window.location.origin}/visit/${club.id}`,
@@ -502,7 +502,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   function openEventQr(event: EventItem) {
     return openShareQr({
       title: event.name,
-      kicker: "EVENT INVITE QR · READY",
+      kicker: "EVENT INVITE QR",
       intro: "참가자가 최초 한 번 정보를 등록하고 스탬프 투어를 시작하는 초대 QR입니다.",
       label: "행사 참가 등록",
       link: `${window.location.origin}/join/${event.inviteToken}`,
@@ -513,7 +513,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   function openStampQr(point: StampPoint) {
     return openShareQr({
       title: point.name,
-      kicker: "STAMP POINT QR · READY",
+      kicker: "STAMP POINT QR",
       intro: "행사장에 비치할 지점 QR입니다. 등록된 참가자가 스캔하면 스탬프가 자동 저장됩니다.",
       label: "스탬프 획득",
       link: `${window.location.origin}/stamp/${point.token}`,
@@ -532,18 +532,17 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
     <main className="admin-shell">
       <aside className="admin-sidebar">
         <a href="/" target="_top" className="brand-lockup brand-admin"><span className="brand-mark">ㅁ</span><span>모아</span></a>
-        <p className="workspace-label">NCHM 연계 운영</p>
+        <p className="workspace-label">행사 운영 워크스페이스</p>
         <nav className="side-nav" aria-label="관리자 메뉴">
           <a href="#overview" className="active"><span>⌂</span>대시보드</a>
           <a href="#events"><span>◇</span>행사 관리</a>
           <a href="#clubs"><span>⌗</span>동아리 스탬프</a>
           <a href="#stamps"><span>＋</span>추가 지점</a>
           <a href="#responses"><span>≡</span>응답 내역</a>
-          <a href="#integration"><span>↔</span>연동 안내</a>
         </nav>
         <div className="sidebar-help">
-          <span className="status-dot" /> 베타버전
-          <p>베타버전 운영테스트중 123123 .</p>
+          <strong>행사별 독립 관리</strong>
+          <p>행사 정보와 참가 기록은 로그인 계정별로 구분됩니다.</p>
         </div>
         <a href="/" target="_top" className="back-link">← 소개 화면으로</a>
       </aside>
@@ -650,7 +649,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                       <article className="stamp-admin-card" key={point.id}>
                         <div className="stamp-admin-number">{String(index + 1).padStart(2, "0")}</div>
                         <div><h3>{point.name}</h3><p>{point.description || "현장에서 QR을 스캔해 방문을 인증합니다."}</p></div>
-                        <span className={point.active ? "active" : "inactive"}>{point.active ? "운영 중" : "비활성"}</span>
+                        <span className={point.active ? "active" : "inactive"}>{point.active ? "사용 가능" : "사용 안 함"}</span>
                         <button disabled={qrBusy} onClick={() => openStampQr(point)}>QR 보기 · 저장 →</button>
                       </article>
                     ))}
@@ -662,11 +661,11 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
 
               <div className="analytics-grid">
                 <section className="panel" id="responses">
-                  <div className="panel-heading"><div><p>응답 분포</p><h2>연령 구분</h2></div><span>실시간</span></div>
+                  <div className="panel-heading"><div><p>응답 분포</p><h2>연령 구분</h2></div><span>응답 기준</span></div>
                   <AgeChart items={stats.age} total={selected.responseCount} />
                 </section>
                 <section className="panel">
-                  <div className="panel-heading"><div><p>응답 분포</p><h2>성별</h2></div><span>실시간</span></div>
+                  <div className="panel-heading"><div><p>응답 분포</p><h2>성별</h2></div><span>응답 기준</span></div>
                   <GenderChart items={stats.gender} total={selected.responseCount} />
                 </section>
               </div>
@@ -676,11 +675,6 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 <RecentTable items={stats.recent} />
               </section>
 
-              <section className="integration-card" id="integration">
-                <div className="integration-icon">↔</div>
-                <div><span>연동 준비중</span><h2>개발중</h2><p>현재는 독립적으로 안전하게 운영중</p></div>
-                <div className="integration-route"><small>현재 권장 흐름</small><strong>확인</strong><i>→</i><strong>수정</strong><i>→</i><strong></strong></div>
-              </section>
             </div>
           )}
         </div>
@@ -711,8 +705,8 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <section className="empty-state">
       <div className="empty-illustration"><span>＋</span><i /><i /><i /></div>
-      <p className="eyebrow"><span /> READY TO START</p>
-      <h2>첫 행사를 만들어 볼까요?</h2>
+      <p className="eyebrow"><span /> EVENT SETUP</p>
+      <h2>첫 행사를 만들어 보세요.</h2>
       <p>행사를 만든 뒤 동아리를 추가하면 각 동아리 QR이 기본 참여 스탬프로 사용됩니다. 추가 지점은 필요할 때만 더할 수 있습니다.</p>
       <button className="button button-primary" onClick={onCreate}>새 행사 만들기 →</button>
     </section>
@@ -791,16 +785,16 @@ function ModalShell({ title, kicker, closeDisabled = false, onClose, children }:
 
 function EventModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const today = getSeoulDateKey();
-  return <ModalShell title="새 행사 만들기" kicker="STEP 01 · EVENT" closeDisabled={busy} onClose={onClose}><p className="modal-intro">기본 정보를 입력하면 참가자 초대 QR이 자동으로 만들어집니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus maxLength={100} placeholder="예: 2026 여름 공동체 주간" /></label><label>행사 설명 <small>선택</small><textarea name="description" rows={3} maxLength={1000} placeholder="참가자 화면에 보여줄 짧은 소개" /></label><div className="form-row"><label>시작일<input name="startDate" type="date" defaultValue={today} required /></label><label>종료일<input name="endDate" type="date" defaultValue={today} required /></label></div><div className="form-row"><label>기관명<input name="institution" maxLength={100} defaultValue="NCHM" /></label><label>장소<input name="location" maxLength={200} placeholder="예: 본관 1층" /></label></div><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "행사 만드는 중…" : "행사와 초대 QR 만들기 →"}</button></div></form></ModalShell>;
+  return <ModalShell title="새 행사 만들기" kicker="행사 정보" closeDisabled={busy} onClose={onClose}><p className="modal-intro">기본 정보를 입력하면 참가자 초대 QR이 자동으로 만들어집니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus maxLength={100} placeholder="예: 2026 여름 공동체 주간" /></label><label>행사 설명 <small>선택</small><textarea name="description" rows={3} maxLength={1000} placeholder="참가자 화면에 보여줄 짧은 소개" /></label><div className="form-row"><label>시작일<input name="startDate" type="date" defaultValue={today} required /></label><label>종료일<input name="endDate" type="date" defaultValue={today} required /></label></div><div className="form-row"><label>기관명<input name="institution" maxLength={100} defaultValue="NCHM" /></label><label>장소<input name="location" maxLength={200} placeholder="예: 본관 1층" /></label></div><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "행사 만드는 중…" : "행사와 초대 QR 만들기 →"}</button></div></form></ModalShell>;
 }
 
 function ClubModal({ eventName, club, busy, onClose, onSubmit }: { eventName: string; club?: Club; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const editing = Boolean(club);
-  return <ModalShell title={editing ? "동아리 수정" : "동아리 스탬프 추가"} kicker={editing ? "CLUB · EDIT" : "STEP 02 · PRIMARY STAMP"} closeDisabled={busy} onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 동아리 정보와 QR 스캔 후 보여줄 안내를 설정합니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><div className="form-row club-name-row"><label>동아리명<input name="name" required autoFocus maxLength={60} defaultValue={club?.name} placeholder="예: 청년 찬양팀" /></label><label>도장 모양<input name="stampEmoji" maxLength={8} defaultValue={club?.stampEmoji || "⭐"} placeholder="⭐" /></label></div><label>동아리 소개 <small>참여 전 표시</small><input name="description" maxLength={200} defaultValue={club?.description} placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><label>스탬프 완료 멘트 <small>선택</small><input name="stampMessage" maxLength={120} defaultValue={club?.stampMessage} placeholder="예: 미션 성공! 선생님께 화면을 보여 주세요." /></label><label>요건·제출 안내 <small>선택</small><textarea name="submissionGuide" rows={3} maxLength={300} defaultValue={club?.submissionGuide} placeholder="예: 활동지 작성 후 본관 1층 안내 부스로 보내 주세요." /></label><fieldset disabled={busy}><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked={club?.collectGender ?? true} /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked={club?.collectAge ?? true} /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "저장 중…" : editing ? "수정 내용 저장 →" : "동아리 스탬프 QR 만들기 →"}</button></div></form></ModalShell>;
+  return <ModalShell title={editing ? "동아리 수정" : "동아리 스탬프 추가"} kicker={editing ? "동아리 정보 수정" : "동아리 정보"} closeDisabled={busy} onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 동아리 정보와 QR 스캔 후 보여줄 안내를 설정합니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><div className="form-row club-name-row"><label>동아리명<input name="name" required autoFocus maxLength={60} defaultValue={club?.name} placeholder="예: 청년 찬양팀" /></label><label>도장 모양<input name="stampEmoji" maxLength={8} defaultValue={club?.stampEmoji || "⭐"} placeholder="⭐" /></label></div><label>동아리 소개 <small>참여 전 표시</small><input name="description" maxLength={200} defaultValue={club?.description} placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><label>스탬프 완료 멘트 <small>선택</small><input name="stampMessage" maxLength={120} defaultValue={club?.stampMessage} placeholder="예: 미션 성공! 선생님께 화면을 보여 주세요." /></label><label>요건·제출 안내 <small>선택</small><textarea name="submissionGuide" rows={3} maxLength={300} defaultValue={club?.submissionGuide} placeholder="예: 활동지 작성 후 본관 1층 안내 부스로 보내 주세요." /></label><fieldset disabled={busy}><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked={club?.collectGender ?? true} /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked={club?.collectAge ?? true} /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "저장 중…" : editing ? "수정 내용 저장 →" : "동아리 스탬프 QR 만들기 →"}</button></div></form></ModalShell>;
 }
 
 function StampPointModal({ eventName, busy, onClose, onSubmit }: { eventName: string; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <ModalShell title="추가 지점 만들기" kicker="OPTIONAL · EXTRA POINT" closeDisabled={busy} onClose={onClose}><p className="modal-intro">기본 스탬프는 동아리 QR입니다. <strong>{eventName}</strong>에 포토존 같은 별도 방문 지점이 필요할 때만 추가해 주세요.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><label>추가 지점명<input name="name" required autoFocus maxLength={40} placeholder="예: 포토존" /></label><label>지점 설명 <small>선택</small><textarea name="description" rows={3} maxLength={300} placeholder="참가자 진행 화면에 보여줄 안내" /></label><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "추가 지점 만드는 중…" : "추가 지점 QR 만들기 →"}</button></div></form></ModalShell>;
+  return <ModalShell title="추가 지점 만들기" kicker="추가 지점 정보" closeDisabled={busy} onClose={onClose}><p className="modal-intro">기본 스탬프는 동아리 QR입니다. <strong>{eventName}</strong>에 포토존 같은 별도 방문 지점이 필요할 때만 추가해 주세요.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><label>추가 지점명<input name="name" required autoFocus maxLength={40} placeholder="예: 포토존" /></label><label>지점 설명 <small>선택</small><textarea name="description" rows={3} maxLength={300} placeholder="참가자 진행 화면에 보여줄 안내" /></label><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "추가 지점 만드는 중…" : "추가 지점 QR 만들기 →"}</button></div></form></ModalShell>;
 }
 
 function EventDeletionModal({ action, busy, error, onClose, onMoveToTrash, onPermanentDelete }: {
@@ -882,7 +876,7 @@ function QrModal({ qr, data, busy, onClose, onNotify }: { qr: ShareQr; data: str
       onNotify("인쇄 창을 열지 못했습니다. QR 이미지를 저장해 인쇄해 주세요.");
     }
   }
-  return <ModalShell title={qr.title} kicker={qr.kicker} closeDisabled={busy} onClose={onClose}><p className="modal-intro">{qr.intro}</p><div className="qr-box">{busy ? <div className="qr-generating" role="status"><i />QR 이미지 만드는 중…</div> : data && <img src={data} alt={`${qr.title} QR 코드`} />}<span>{qr.label}</span></div><div className="link-box"><span>{qr.link}</span><button disabled={busy} onClick={() => void copy()}>복사</button></div><div className="qr-actions"><button className="qr-print-button" disabled={busy || !data} onClick={printQr}>QR 인쇄</button><a href={qr.link} target="_blank" rel="noreferrer">화면 보기 ↗</a>{data ? <a className="button button-primary" href={data} download={qr.filename}>QR 이미지 저장 ↓</a> : <button className="button button-primary" disabled>QR 준비 중…</button>}</div></ModalShell>;
+  return <ModalShell title={qr.title} kicker={qr.kicker} closeDisabled={busy} onClose={onClose}><p className="modal-intro">{qr.intro}</p><div className="qr-box">{busy ? <div className="qr-generating" role="status"><i />QR 이미지 만드는 중…</div> : data && <img src={data} alt={`${qr.title} QR 코드`} />}<span>{qr.label}</span></div><div className="link-box"><span>{qr.link}</span><button disabled={busy} onClick={() => void copy()}>복사</button></div><div className="qr-actions"><button className="qr-print-button" disabled={busy || !data} onClick={printQr}>QR 인쇄</button><a href={qr.link} target="_blank" rel="noreferrer">화면 보기 ↗</a>{data ? <a className="button button-primary" href={data} download={qr.filename}>QR 이미지 저장 ↓</a> : <button className="button button-primary" disabled>QR 생성 중…</button>}</div></ModalShell>;
 }
 
 async function readApiResponse<T = Record<string, unknown>>(response: Response, fallbackMessage: string): Promise<T> {

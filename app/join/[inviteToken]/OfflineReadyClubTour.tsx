@@ -192,7 +192,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
   async function startScanner() {
     const session = ++scannerSession.current;
     setScannerOpen(true);
-    setScannerStatus("카메라를 준비하고 있어요…");
+    setScannerStatus("카메라에 연결하고 있어요…");
     scanLocked.current = false;
     await new Promise((resolve) => window.setTimeout(resolve, 50));
     try {
@@ -200,7 +200,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
         throw new Error("이 브라우저에서는 카메라 스캔을 지원하지 않습니다.");
       }
       const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 180 });
-      if (!videoRef.current) throw new Error("카메라 화면을 준비하지 못했습니다.");
+      if (!videoRef.current) throw new Error("카메라 화면을 열지 못했습니다.");
       const controls = await reader.decodeFromConstraints(
         { video: { facingMode: { ideal: "environment" } }, audio: false },
         videoRef.current,
@@ -231,7 +231,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
     }
   }
 
-  if (loading) return <TourCenter message="행사 참여 화면을 준비하고 있어요." />;
+  if (loading) return <TourCenter message="행사 참여 화면을 불러오고 있어요." />;
   if (error && !tour) return <TourCenter error message={error} />;
   if (!tour) return null;
   if (!tour.participant) {
@@ -263,7 +263,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
         <div className="tour-progress-copy">
           <div><strong>{tour.progress.total}개 동아리 중 {tour.progress.completed}개 참여</strong><span>{tour.progress.percent}%</span></div>
           <div className="tour-progress-track"><i style={{ width: `${tour.progress.percent}%` }} /></div>
-          <p>{remaining.length ? `앞으로 ${remaining.length}개 동아리가 남았어요.` : tour.clubs.length ? "모든 동아리에 참여했어요!" : "관리자가 동아리를 준비하고 있어요."}</p>
+          <p>{remaining.length ? `앞으로 ${remaining.length}개 동아리가 남았어요.` : tour.clubs.length ? "모든 동아리에 참여했어요!" : "이 행사에 등록된 동아리가 없습니다."}</p>
         </div>
       </section>
 
@@ -278,7 +278,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
               </article>
             ))}
           </div>
-        ) : <div className="tour-empty">등록된 동아리가 아직 없습니다.</div>}
+        ) : <div className="tour-empty">이 행사에 등록된 동아리가 없습니다.</div>}
       </section>
 
       {tour.extraPoints.length > 0 && (

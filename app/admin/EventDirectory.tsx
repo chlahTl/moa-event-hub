@@ -138,7 +138,7 @@ export default function EventDirectory<T extends DirectoryEvent>({
         )} />
       ) : (
         <div className="event-groups">
-          <EventGroup title="진행 중·예정 행사" subtitle="현재 운영 중인 행사와 앞으로 열릴 행사" events={currentAndUpcoming} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 진행 중·예정 행사가 없습니다." : "진행 중이거나 예정된 행사가 없습니다."} renderEvent={(event) => (
+          <EventGroup title="진행 중·예정 행사" subtitle="오늘 참여할 수 있는 행사와 앞으로 열릴 행사" events={currentAndUpcoming} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 진행 중·예정 행사가 없습니다." : "진행 중이거나 예정된 행사가 없습니다."} renderEvent={(event) => (
             <EventCard key={event.id} event={event} selected={selectedId === event.id} view={view} busy={busyEventId === event.id} onSelect={onSelect} onRequestTrash={onRequestTrash} onRestore={onRestore} onRequestPermanentDelete={onRequestPermanentDelete} />
           )} />
           <EventGroup title="지난 행사" subtitle="종료일이 지난 행사" events={past} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 지난 행사가 없습니다." : "아직 종료된 행사가 없습니다."} renderEvent={(event) => (

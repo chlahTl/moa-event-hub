@@ -18,7 +18,7 @@ export function getEventAvailability(event: EventWindow) {
     return { available: false, message: "더 이상 참여할 수 없는 행사입니다." };
   }
   if (event.status !== "active") {
-    return { available: false, message: "현재 운영 중인 행사가 아닙니다." };
+    return { available: false, message: "현재 참여할 수 없는 행사입니다." };
   }
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
