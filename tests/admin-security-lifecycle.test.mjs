@@ -97,7 +97,7 @@ test("recommends an operational event in lifecycle priority order", () => {
   ], today), "active-next");
 });
 
-test("Google session authorization rejects anonymous and forged-header requests", async () => {
+test("OAuth session authorization rejects anonymous and forged-header requests", async () => {
   const anonymous = await authorizeAdminRequest(new Request("http://localhost/api/events"));
   assert.equal(anonymous.authorized, false);
   if (anonymous.authorized) assert.fail("anonymous request was authorized");
@@ -142,10 +142,42 @@ test("only accepts safe same-origin return paths", () => {
   assert.equal(safeRelativeReturnPath("/api/auth/signout"), "/admin");
 });
 
+test("Google and Naver OAuth entry routes keep callbacks on the requested Cloudflare origin", async () => {
+  Object.assign(globalThis.__moaTestCloudflareEnv, {
+    GOOGLE_CLIENT_ID: "google-client-id",
+    GOOGLE_CLIENT_SECRET: "google-client-secret",
+    NAVER_CLIENT_ID: "naver-client-id",
+    NAVER_CLIENT_SECRET: "naver-client-secret",
+  });
+  const [{ GET: startGoogle }, { GET: startNaver }] = await Promise.all([
+    import("../app/api/auth/google/route.ts"),
+    import("../app/api/auth/naver/route.ts"),
+  ]);
+  const origin = "https://moa-event-hub.choewonhyeog387.workers.dev";
+
+  const googleResponse = await startGoogle(new Request(`${origin}/api/auth/google?returnTo=%2Fadmin`));
+  assert.equal(googleResponse.status, 302);
+  const googleLocation = new URL(googleResponse.headers.get("location"));
+  assert.equal(googleLocation.origin, "https://accounts.google.com");
+  assert.equal(
+    googleLocation.searchParams.get("redirect_uri"),
+    `${origin}/api/auth/callback/google`,
+  );
+
+  const naverResponse = await startNaver(new Request(`${origin}/api/auth/naver?returnTo=%2Fadmin`));
+  assert.equal(naverResponse.status, 302);
+  const naverLocation = new URL(naverResponse.headers.get("location"));
+  assert.equal(naverLocation.origin, "https://nid.naver.com");
+  assert.equal(
+    naverLocation.searchParams.get("redirect_uri"),
+    `${origin}/api/auth/callback/naver`,
+  );
+});
+
 test("keeps every management API authenticated and owner-scoped", async () => {
   const adminPage = await readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
   assert.match(adminPage, /export const dynamic = "force-dynamic"/);
-  assert.match(adminPage, /requireGoogleUser\("\/admin"\)/);
+  assert.match(adminPage, /requireAppUser\("\/admin"\)/);
 
   const protectedRoutes = new Map([
     ["../app/api/events/route.ts", 2],
@@ -222,6 +254,8 @@ test("service worker never caches administrator, API, or authentication response
     "/signin",
     "/api/auth/google",
     "/api/auth/callback/google",
+    "/api/auth/naver",
+    "/api/auth/callback/naver",
     "/api/auth/signout",
   ];
   for (const path of networkOnlyPaths) {

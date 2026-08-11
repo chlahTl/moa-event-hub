@@ -1,9 +1,13 @@
 import { env } from "cloudflare:workers";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ensureDatabase, getDb } from "../db";
-import { authSessions, users } from "../db/schema";
+import { authSessions, events, oauthAccounts, users } from "../db/schema";
+
+const LEGACY_OWNER_EMAIL = "choewonhyeog387@gmail.com";
+
+export type OAuthProvider = "google" | "naver";
 
 export type AppUser = {
   id: string;
@@ -53,17 +57,17 @@ export async function getCurrentUser(
   return row ? toAppUser(row) : null;
 }
 
-export async function requireGoogleUser(returnTo: string): Promise<AppUser> {
+export async function requireAppUser(returnTo: string): Promise<AppUser> {
   const user = await getCurrentUser();
   if (user) return user;
-  redirect(googleSignInPath(returnTo));
+  redirect(signInPath(returnTo));
 }
 
-export function googleSignInPath(returnTo = "/admin"): string {
+export function signInPath(returnTo = "/admin"): string {
   return `/signin?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 
-export function googleSignOutPath(returnTo = "/"): string {
+export function signOutPath(returnTo = "/"): string {
   return `/api/auth/signout?returnTo=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`;
 }
 
@@ -74,7 +78,7 @@ export async function authorizeAdminRequest(
   if (!user) {
     return {
       authorized: false,
-      response: authorizationError(401, "관리자 로그인이 필요합니다. Google로 로그인한 뒤 다시 시도해 주세요."),
+      response: authorizationError(401, "관리자 로그인이 필요합니다. Google 또는 네이버로 로그인한 뒤 다시 시도해 주세요."),
     };
   }
 
@@ -88,11 +92,80 @@ export async function authorizeAdminRequest(
   return { authorized: true, user };
 }
 
-export function getGoogleOAuthConfig() {
+export function getOAuthConfig(provider: OAuthProvider) {
   const bindings = env as unknown as Record<string, unknown>;
-  const clientId = bindingString(bindings.GOOGLE_CLIENT_ID);
-  const clientSecret = bindingString(bindings.GOOGLE_CLIENT_SECRET);
+  const prefix = provider === "google" ? "GOOGLE" : "NAVER";
+  const clientId = bindingString(bindings[`${prefix}_CLIENT_ID`]);
+  const clientSecret = bindingString(bindings[`${prefix}_CLIENT_SECRET`]);
   return clientId && clientSecret ? { clientId, clientSecret } : null;
+}
+
+export async function establishOAuthSession(input: {
+  provider: OAuthProvider;
+  subject: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+}): Promise<string> {
+  await ensureDatabase();
+  const db = getDb();
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const [existing] = await db.select({ user: users }).from(oauthAccounts)
+    .innerJoin(users, eq(oauthAccounts.userId, users.id))
+    .where(and(
+      eq(oauthAccounts.provider, input.provider),
+      eq(oauthAccounts.providerAccountId, input.subject),
+    ))
+    .limit(1);
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let userId: string;
+
+  if (existing) {
+    userId = existing.user.id;
+    await db.update(users).set({
+      displayName: input.displayName,
+      email: normalizedEmail,
+      avatarUrl: input.avatarUrl,
+      updatedAt: nowIso,
+    }).where(eq(users.id, userId));
+    await db.update(oauthAccounts).set({ email: normalizedEmail, updatedAt: nowIso })
+      .where(and(
+        eq(oauthAccounts.provider, input.provider),
+        eq(oauthAccounts.providerAccountId, input.subject),
+      ));
+  } else {
+    userId = crypto.randomUUID();
+    await db.insert(users).values({
+      id: userId,
+      displayName: input.displayName,
+      email: normalizedEmail,
+      avatarUrl: input.avatarUrl,
+      updatedAt: nowIso,
+    });
+    await db.insert(oauthAccounts).values({
+      id: crypto.randomUUID(),
+      userId,
+      provider: input.provider,
+      providerAccountId: input.subject,
+      email: normalizedEmail,
+      updatedAt: nowIso,
+    });
+  }
+
+  await db.delete(authSessions).where(lt(authSessions.expiresAt, nowIso));
+  const rawSessionToken = randomToken(48);
+  await db.insert(authSessions).values({
+    id: crypto.randomUUID(),
+    userId,
+    tokenHash: await sha256Hex(rawSessionToken),
+    expiresAt: new Date(now.getTime() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000).toISOString(),
+    lastSeenAt: nowIso,
+  });
+  if (normalizedEmail === LEGACY_OWNER_EMAIL) {
+    await db.update(events).set({ ownerUserId: userId }).where(isNull(events.ownerUserId));
+  }
+  return rawSessionToken;
 }
 
 export function readCookie(

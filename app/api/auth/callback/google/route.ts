@@ -1,22 +1,15 @@
-import { and, eq, isNull, lt } from "drizzle-orm";
-import { ensureDatabase, getDb } from "../../../../../db";
-import { authSessions, events, oauthAccounts, users } from "../../../../../db/schema";
 import {
-  ADMIN_SESSION_MAX_AGE_SECONDS,
   OAUTH_NONCE_COOKIE,
   OAUTH_RETURN_COOKIE,
   OAUTH_STATE_COOKIE,
   OAUTH_VERIFIER_COOKIE,
   clearAuthCookie,
   decodeReturnPath,
-  getGoogleOAuthConfig,
-  randomToken,
+  establishOAuthSession,
+  getOAuthConfig,
   readCookie,
   sessionCookie,
-  sha256Hex,
 } from "../../../../auth";
-
-const LEGACY_OWNER_EMAIL = "choewonhyeog387@gmail.com";
 
 type GoogleTokenResponse = { access_token?: string; id_token?: string };
 type GoogleUserInfo = {
@@ -30,7 +23,7 @@ type GoogleUserInfo = {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const secure = url.protocol === "https:";
-  const config = getGoogleOAuthConfig();
+  const config = getOAuthConfig("google");
   const state = url.searchParams.get("state");
   const expectedState = readCookie(request.headers, OAUTH_STATE_COOKIE);
   const verifier = readCookie(request.headers, OAUTH_VERIFIER_COOKIE);
@@ -72,27 +65,13 @@ export async function GET(request: Request) {
       throw new Error("google-profile-invalid");
     }
 
-    const user = await upsertGoogleUser({
+    const rawSessionToken = await establishOAuthSession({
+      provider: "google",
       subject: profile.sub,
       email,
       displayName: profile.name?.trim() || email.split("@", 1)[0],
       avatarUrl: profile.picture?.trim() || null,
     });
-    const rawSessionToken = randomToken(48);
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000).toISOString();
-    const db = getDb();
-    await db.delete(authSessions).where(lt(authSessions.expiresAt, now.toISOString()));
-    await db.insert(authSessions).values({
-      id: crypto.randomUUID(),
-      userId: user.id,
-      tokenHash: await sha256Hex(rawSessionToken),
-      expiresAt,
-      lastSeenAt: now.toISOString(),
-    });
-    if (email === LEGACY_OWNER_EMAIL) {
-      await db.update(events).set({ ownerUserId: user.id }).where(isNull(events.ownerUserId));
-    }
 
     const headers = new Headers({ Location: new URL(returnTo, url.origin).toString(), "Cache-Control": "no-store" });
     headers.append("Set-Cookie", sessionCookie(rawSessionToken, secure));
@@ -101,50 +80,6 @@ export async function GET(request: Request) {
   } catch {
     return authFailure(request, "failed", secure);
   }
-}
-
-async function upsertGoogleUser(input: {
-  subject: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-}) {
-  await ensureDatabase();
-  const db = getDb();
-  const [existing] = await db.select({ user: users }).from(oauthAccounts)
-    .innerJoin(users, eq(oauthAccounts.userId, users.id))
-    .where(and(eq(oauthAccounts.provider, "google"), eq(oauthAccounts.providerAccountId, input.subject)))
-    .limit(1);
-  const now = new Date().toISOString();
-  if (existing) {
-    const [user] = await db.update(users).set({
-      displayName: input.displayName,
-      email: input.email,
-      avatarUrl: input.avatarUrl,
-      updatedAt: now,
-    }).where(eq(users.id, existing.user.id)).returning();
-    await db.update(oauthAccounts).set({ email: input.email, updatedAt: now })
-      .where(and(eq(oauthAccounts.provider, "google"), eq(oauthAccounts.providerAccountId, input.subject)));
-    return user;
-  }
-
-  const userId = crypto.randomUUID();
-  const [user] = await db.insert(users).values({
-    id: userId,
-    displayName: input.displayName,
-    email: input.email,
-    avatarUrl: input.avatarUrl,
-    updatedAt: now,
-  }).returning();
-  await db.insert(oauthAccounts).values({
-    id: crypto.randomUUID(),
-    userId,
-    provider: "google",
-    providerAccountId: input.subject,
-    email: input.email,
-    updatedAt: now,
-  });
-  return user;
 }
 
 function validateIdTokenClaims(idToken: string, nonce: string, clientId: string) {

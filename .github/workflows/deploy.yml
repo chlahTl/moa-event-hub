@@ -1,24 +1,23 @@
-name: Verify Moa
+name: Deploy Moa to Cloudflare
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: moa-verify-${{ github.ref }}
-  cancel-in-progress: true
+  group: moa-production
+  cancel-in-progress: false
 
 jobs:
-  verify:
-    name: Lint, test, and build
+  deploy:
+    name: Verify, migrate, and deploy
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - name: Check out repository
@@ -33,18 +32,43 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint source
-        run: npm run lint
+      - name: Verify application
+        run: |
+          npm run lint
+          npm test
 
-      - name: Test production bundle and core flows
-        run: npm test
+      - name: Require OAuth secrets in the existing Cloudflare Worker
+        shell: bash
+        run: |
+          secret_list="$(npx wrangler secret list --name moa-event-hub --format json)"
+          SECRET_LIST_JSON="$secret_list" node - <<'NODE'
+          const rows = JSON.parse(process.env.SECRET_LIST_JSON || "[]");
+          const existing = new Set(rows.map((row) => row.name));
+          const required = [
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "NAVER_CLIENT_ID",
+            "NAVER_CLIENT_SECRET",
+          ];
+          const missing = required.filter((key) => !existing.has(key));
+          if (missing.length) {
+            console.error(`Missing Cloudflare Worker secrets: ${missing.join(", ")}`);
+            process.exit(1);
+          }
+          NODE
 
-      - name: Explain the publishing boundary
+      - name: Apply production D1 migrations
+        run: npm run db:migrate:production
+
+      - name: Deploy existing Cloudflare Worker
+        run: npm run deploy:production
+
+      - name: Publish deployment summary
         run: |
           {
-            echo "## 모아 검증 완료"
+            echo "## 모아 Cloudflare 배포 완료"
             echo
-            echo "관리자 인증은 앱의 Google OAuth와 D1 서버 세션을 사용합니다."
-            echo "Sites는 호스팅, 데이터베이스 연결, 운영 비밀변수 보관을 담당합니다."
-            echo "운영 데이터베이스 마이그레이션과 배포는 별도 승인된 Sites 배포에서 진행합니다."
+            echo "서비스 주소: [https://moa-event-hub.choewonhyeog387.workers.dev](https://moa-event-hub.choewonhyeog387.workers.dev)"
+            echo
+            echo "Google·네이버 로그인과 D1 사용자별 행사 분리를 사용합니다."
           } >> "$GITHUB_STEP_SUMMARY"

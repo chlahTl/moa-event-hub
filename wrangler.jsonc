@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "moa-event-hub",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "site-creator-d1",
+      "database_id": "6bac8468-05e4-4d07-8041-34120573f07c",
+      "migrations_dir": "./drizzle"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "NAVER_CLIENT_ID",
+      "NAVER_CLIENT_SECRET"
+    ]
+  }
+}

@@ -29,5 +29,7 @@ declare module "cloudflare:workers" {
     ASSETS?: Fetcher;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
+    NAVER_CLIENT_ID?: string;
+    NAVER_CLIENT_SECRET?: string;
   };
 }

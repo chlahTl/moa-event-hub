@@ -1,2 +1,4 @@
 GOOGLE_CLIENT_ID=899388453536-h7ctq6eh6o2kjvs0lvp64070k7opp2sg.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=replace-with-a-secret-from-google-cloud
+NAVER_CLIENT_ID=replace-with-a-client-id-from-naver-developers
+NAVER_CLIENT_SECRET=replace-with-a-client-secret-from-naver-developers
