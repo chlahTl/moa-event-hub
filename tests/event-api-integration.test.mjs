@@ -22,12 +22,14 @@ const [
   permanentRoute,
   clubsRoute,
   clubRoute,
+  responsesRoute,
   stampPointsRoute,
   tourRoute,
   tourJoinRoute,
   claimRoute,
   statsRoute,
   exportRoute,
+  manualRecordsRoute,
   adminAuth,
   databaseModule,
 ] = await Promise.all([
@@ -38,12 +40,14 @@ const [
   import("../app/api/events/[eventId]/permanent/route.ts"),
   import("../app/api/clubs/route.ts"),
   import("../app/api/clubs/[clubId]/route.ts"),
+  import("../app/api/responses/route.ts"),
   import("../app/api/stamp-points/route.ts"),
   import("../app/api/tour/[inviteToken]/route.ts"),
   import("../app/api/tour/[inviteToken]/join/route.ts"),
   import("../app/api/stamps/claim/route.ts"),
   import("../app/api/stats/route.ts"),
   import("../app/api/export/route.ts"),
+  import("../app/api/manual-records/route.ts"),
   import("../app/auth.ts"),
   import("../db/index.ts"),
 ]);
@@ -111,6 +115,39 @@ function eventRowCount(table, eventId) {
   return Number(row.total);
 }
 
+test("stamp features default to off and can be enabled later", async () => {
+  const created = await json(await eventsRoute.POST(request("/api/events", {
+    method: "POST",
+    admin: true,
+    body: {
+      name: "일반 행사",
+      startDate: "2026-08-11",
+      endDate: "2026-08-11",
+      institution: "모아",
+    },
+  })), 201);
+  assert.equal(created.event.stampEnabled, false);
+
+  const blockedClub = await clubsRoute.POST(request("/api/clubs", {
+    method: "POST",
+    admin: true,
+    body: { eventId: created.event.id, name: "숨겨진 부스" },
+  }));
+  assert.equal(blockedClub.status, 409);
+  const blockedTour = await tourRoute.GET(
+    request(`/api/tour/${created.event.inviteToken}`),
+    inviteContext(created.event.inviteToken),
+  );
+  assert.equal(blockedTour.status, 410);
+
+  const updated = await json(await eventRoute.PATCH(request(`/api/events/${created.event.id}`, {
+    method: "PATCH",
+    admin: true,
+    body: { stampEnabled: true },
+  }), eventContext(created.event.id)), 200);
+  assert.equal(updated.event.stampEnabled, true);
+});
+
 test("event APIs preserve public QR flows and safely complete the deletion lifecycle", async () => {
   const unauthenticatedDelete = await eventRoute.DELETE(
     request("/api/events/not-created", { method: "DELETE" }),
@@ -141,12 +178,14 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
       endDate: "2099-12-31",
       location: "서울",
       status: "active",
+      stampEnabled: true,
     },
   })), 201);
   const event = createdEvent.event;
   assert.ok(event.id);
   assert.ok(event.inviteToken);
   assert.equal(event.ownerUserId, ADMIN_USER_ID);
+  assert.equal(event.stampEnabled, true);
 
   const otherUsersEvents = await json(await eventsRoute.GET(request("/api/events", {
     admin: true,
@@ -182,6 +221,17 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.equal(publicClub.club.name, "-환경 동아리");
   assert.equal(publicClub.club.stampEmoji, "🌱");
 
+  const directResponse = await json(await responsesRoute.POST(request("/api/responses", {
+    method: "POST",
+    body: {
+      clubId: club.id,
+      participantName: "일반 참가자",
+      gender: "여성",
+      ageGroup: "일반",
+    },
+  })), 201);
+  assert.ok(directResponse.response.id);
+
   const createdPoint = await json(await stampPointsRoute.POST(request("/api/stamp-points", {
     method: "POST",
     admin: true,
@@ -208,13 +258,14 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
       body: {
         participantName: "@김 모아",
         gender: "응답하지 않음",
-        ageGroup: "청년",
+        ageGroup: "일반",
       },
     }),
     inviteContext(event.inviteToken),
   );
   const joinedTour = await json(joinResponse, 201);
   assert.equal(joinedTour.participant.name, "@김 모아");
+  assert.equal(joinedTour.participant.ageGroup, "일반");
   const participantCookie = joinResponse.headers.get("set-cookie")?.split(";", 1)[0];
   assert.match(participantCookie ?? "", /^moa_participant_session=[A-Za-z0-9_-]+$/);
 
@@ -253,6 +304,28 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.equal(joinedTourAgain.progress.completed, 1);
   assert.equal(joinedTourAgain.extraProgress.completed, 1);
 
+  const manualRecord = await json(await manualRecordsRoute.POST(request("/api/manual-records", {
+    method: "POST",
+    admin: true,
+    body: {
+      eventId: event.id,
+      participantName: "종이 참가자",
+      contactInfo: "2026001",
+      affiliation: "청년부",
+      gender: "여성",
+      ageGroup: "일반",
+      visitedAt: "2026-08-11T10:30",
+      clubIds: [club.id],
+      stampPointIds: [point.id],
+    },
+  })), 201);
+  assert.ok(manualRecord.record.id);
+  const paperRecords = await json(await manualRecordsRoute.GET(request(`/api/manual-records?eventId=${event.id}`, { admin: true })), 200);
+  assert.equal(paperRecords.records.length, 1);
+  assert.equal(paperRecords.records[0].contactInfo, "2026001");
+  assert.deepEqual(paperRecords.records[0].clubs, ["-환경 동아리"]);
+  assert.deepEqual(paperRecords.records[0].stampPoints, ["포토존"]);
+
   const unauthenticatedStats = await statsRoute.GET(request(`/api/stats?eventId=${event.id}`));
   assert.equal(unauthenticatedStats.status, 401);
   const statsResponse = await statsRoute.GET(request(`/api/stats?eventId=${event.id}`, {
@@ -260,8 +333,8 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   }));
   const stats = await json(statsResponse, 200);
   assert.match(statsResponse.headers.get("cache-control") ?? "", /no-store/);
-  assert.deepEqual(stats.age, [{ label: "청년", total: 1 }]);
-  assert.equal(stats.recent.length, 1);
+  assert.deepEqual(stats.age, [{ label: "일반", total: 3 }]);
+  assert.equal(stats.recent.length, 3);
   assert.equal(stats.recent[0].clubName, "-환경 동아리");
 
   const unauthenticatedCsv = await exportRoute.GET(request(`/api/export?eventId=${event.id}`));
@@ -277,14 +350,15 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.match(csv, /"'\+NCHM"/);
   assert.match(csv, /"'-환경 동아리"/);
   assert.match(csv, /"'@김 모아"/);
+  assert.match(csv, /"일반"/);
 
   const expectedImpact = {
     clubCount: 1,
-    participantCount: 1,
-    responseCount: 1,
+    participantCount: 2,
+    responseCount: 3,
     stampPointCount: 1,
-    stampRecordCount: 1,
-    clubStampRecordCount: 1,
+    stampRecordCount: 2,
+    clubStampRecordCount: 2,
   };
   const impact = await json(await deletionImpactRoute.GET(
     request(`/api/events/${event.id}/deletion-impact`, { admin: true }),
@@ -363,7 +437,7 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   );
   assert.equal(wrongConfirmation.status, 400);
   assert.equal(eventRowCount("events", event.id), 1);
-  assert.equal(eventRowCount("participants", event.id), 1);
+  assert.equal(eventRowCount("participants", event.id), 2);
 
   const permanentDelete = await json(await permanentRoute.DELETE(
     request(`/api/events/${event.id}/permanent`, {

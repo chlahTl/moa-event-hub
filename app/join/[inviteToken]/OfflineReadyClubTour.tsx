@@ -2,6 +2,7 @@
 
 import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AGE_GROUP_OPTIONS } from "../../../lib/tour";
 
 type Point = { id: string; name: string; description: string; visited: boolean; visitedAt: string | null };
 type ClubPoint = Omit<Point, "id"> & { stampEmoji: string; stampMessage: string; submissionGuide: string };
@@ -26,15 +27,6 @@ type TourData = {
 };
 
 const GENDERS = ["남성", "여성"];
-const AGES = [
-  { value: "유아", detail: "8세 이하" },
-  { value: "초등", detail: "9~13세" },
-  { value: "중등", detail: "14~16세" },
-  { value: "고등", detail: "17~19세" },
-  { value: "청년", detail: "20~24세" },
-  { value: "후기", detail: "25~39세" },
-  { value: "일반", detail: "40세 이상" },
-];
 
 export default function EventTour({ inviteToken }: { inviteToken: string }) {
   const [tour, setTour] = useState<TourData | null>(null);
@@ -352,7 +344,7 @@ function JoinForm({ inviteToken, event, onJoined }: { inviteToken: string; event
         <form className="visit-form" onSubmit={submit}>
           <fieldset><legend><span>01</span><div><strong>이름을 적어 주세요.</strong><small>행사 참가 확인에만 사용합니다.</small></div></legend><label className="visit-name-field"><span>내 이름</span><input value={participantName} onChange={(event) => setParticipantName(event.target.value)} maxLength={30} autoComplete="name" placeholder="예: 김모아" required autoFocus /></label></fieldset>
           <fieldset><legend><span>02</span><div><strong>성별을 골라 주세요.</strong><small>한 가지만 선택할 수 있어요.</small></div></legend><div className="choice-grid gender-grid">{GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" value={item} checked={gender === item} onChange={() => setGender(item)} /><span className="choice-check">✓</span><strong>{item}</strong></label>)}</div></fieldset>
-          <fieldset><legend><span>03</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>내 나이가 들어가는 범위를 선택해요.</small></div></legend><div className="choice-grid age-grid">{AGES.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}</div></fieldset>
+          <fieldset><legend><span>03</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>내 나이가 들어가는 범위를 선택해요.</small></div></legend><div className="choice-grid age-grid">{AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}</div></fieldset>
           {error && <p className="visit-error">{error}</p>}
           <button className="visit-submit" type="submit" disabled={!canSubmit || submitting}>{submitting ? "참가 등록 중이에요…" : canSubmit ? "참가하기 · 스탬프 투어 시작 →" : "위 내용을 모두 입력해 주세요"}</button>
         </form>

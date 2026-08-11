@@ -27,6 +27,7 @@ export async function ensureDatabase() {
       end_date TEXT,
       location TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'active',
+      stamp_enabled INTEGER NOT NULL DEFAULT 0,
       invite_token TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -96,6 +97,10 @@ export async function ensureDatabase() {
       participant_name TEXT NOT NULL,
       gender TEXT,
       age_group TEXT,
+      contact_info TEXT NOT NULL DEFAULT '',
+      affiliation TEXT NOT NULL DEFAULT '',
+      visited_at TEXT,
+      record_source TEXT NOT NULL DEFAULT 'qr',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
@@ -183,6 +188,7 @@ export async function ensureDatabase() {
     name: string;
   }>();
   const eventColumnNames = new Set(eventColumns.results.map((column) => column.name));
+  const addingStampEnabled = !eventColumnNames.has("stamp_enabled");
   const missingEventColumns = [
     ["owner_user_id", "ALTER TABLE events ADD COLUMN owner_user_id TEXT"],
     ["description", "ALTER TABLE events ADD COLUMN description TEXT NOT NULL DEFAULT ''"],
@@ -192,9 +198,15 @@ export async function ensureDatabase() {
     ["updated_at", "ALTER TABLE events ADD COLUMN updated_at TEXT"],
     ["deleted_at", "ALTER TABLE events ADD COLUMN deleted_at TEXT"],
     ["deleted_by", "ALTER TABLE events ADD COLUMN deleted_by TEXT"],
+    ["stamp_enabled", "ALTER TABLE events ADD COLUMN stamp_enabled INTEGER NOT NULL DEFAULT 0"],
   ] as const;
   for (const [column, statement] of missingEventColumns) {
     if (!eventColumnNames.has(column)) await env.DB.prepare(statement).run();
+  }
+  if (addingStampEnabled) {
+    await env.DB.prepare(`UPDATE events SET stamp_enabled = 1
+      WHERE EXISTS (SELECT 1 FROM clubs WHERE clubs.event_id = events.id)
+         OR EXISTS (SELECT 1 FROM stamp_points WHERE stamp_points.event_id = events.id)`).run();
   }
   await env.DB.prepare(
     "UPDATE events SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL",
@@ -238,6 +250,20 @@ export async function ensureDatabase() {
     await env.DB.prepare(
       "ALTER TABLE responses ADD COLUMN participant_name TEXT NOT NULL DEFAULT ''",
     ).run();
+  }
+
+  const participantColumns = await env.DB.prepare("PRAGMA table_info(participants)").all<{
+    name: string;
+  }>();
+  const participantColumnNames = new Set(participantColumns.results.map((column) => column.name));
+  const missingParticipantColumns = [
+    ["contact_info", "ALTER TABLE participants ADD COLUMN contact_info TEXT NOT NULL DEFAULT ''"],
+    ["affiliation", "ALTER TABLE participants ADD COLUMN affiliation TEXT NOT NULL DEFAULT ''"],
+    ["visited_at", "ALTER TABLE participants ADD COLUMN visited_at TEXT"],
+    ["record_source", "ALTER TABLE participants ADD COLUMN record_source TEXT NOT NULL DEFAULT 'qr'"],
+  ] as const;
+  for (const [column, statement] of missingParticipantColumns) {
+    if (!participantColumnNames.has(column)) await env.DB.prepare(statement).run();
   }
 
   await env.DB.prepare("PRAGMA optimize").run();

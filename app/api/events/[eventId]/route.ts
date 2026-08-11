@@ -21,7 +21,9 @@ export async function PATCH(
     if (!body) return apiError("요청 내용을 확인해 주세요.", 400);
     const changedFields = Object.keys(body).filter((key) => ALLOWED_FIELDS.has(key));
     if (!changedFields.length) return apiError("수정할 행사 정보를 입력해 주세요.", 400);
-    if (changedFields.some((key) => typeof body[key] !== "string")) {
+    if (changedFields.some((key) => key === "stampEnabled"
+      ? typeof body[key] !== "boolean"
+      : typeof body[key] !== "string")) {
       return apiError("행사 정보 형식을 확인해 주세요.", 400);
     }
 
@@ -45,6 +47,7 @@ export async function PATCH(
     const description = body.description === undefined ? current.description : stringField(body, "description");
     const institution = body.institution === undefined ? current.institution : stringField(body, "institution");
     const location = body.location === undefined ? current.location : stringField(body, "location");
+    const stampEnabled = body.stampEnabled === undefined ? current.stampEnabled : body.stampEnabled as boolean;
     if (!name) return apiError("행사명을 입력해 주세요.", 400);
     if (name.length > 100) return apiError("행사명은 100자 이내로 입력해 주세요.", 400);
     if (description.length > 1000) return apiError("행사 설명은 1,000자 이내로 입력해 주세요.", 400);
@@ -66,6 +69,7 @@ export async function PATCH(
       endDate,
       location,
       status,
+      stampEnabled,
       updatedAt: new Date().toISOString(),
     }).where(and(
       eq(events.id, eventId),
@@ -165,6 +169,7 @@ const ALLOWED_FIELDS = new Set([
   "endDate",
   "location",
   "status",
+  "stampEnabled",
 ]);
 
 function normalizeEvent<T extends {

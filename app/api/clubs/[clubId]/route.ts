@@ -28,12 +28,14 @@ export async function GET(
         institution: events.institution,
         eventDate: events.eventDate,
         location: events.location,
+        stampEnabled: events.stampEnabled,
       })
       .from(clubs)
       .innerJoin(events, eq(clubs.eventId, events.id))
       .where(and(eq(clubs.id, clubId), isNull(events.deletedAt)))
       .limit(1);
     if (!rows.length) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
+    if (!rows[0].stampEnabled) return apiError("이 행사는 스탬프 참여를 사용하지 않습니다.", 410);
     return Response.json({ club: rows[0] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return internalApiError("동아리를 불러오지 못했습니다.");

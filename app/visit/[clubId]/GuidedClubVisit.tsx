@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { AGE_GROUP_OPTIONS } from "../../../lib/tour";
 
 type ClubInfo = {
   id: string;
@@ -26,15 +27,6 @@ type ClubStampResult = {
 };
 
 const GENDERS = ["여성", "남성"];
-const AGES = [
-  { value: "유아", detail: "8세 이하" },
-  { value: "초등", detail: "9~13세" },
-  { value: "중등", detail: "14~16세" },
-  { value: "고등", detail: "17~19세" },
-  { value: "청년", detail: "20~24세" },
-  { value: "후기", detail: "25~39세" },
-  { value: "일반", detail: "40세 이상" },
-];
 
 export default function VisitForm({ clubId }: { clubId: string }) {
   const [club, setClub] = useState<ClubInfo | null>(null);
@@ -151,7 +143,7 @@ export default function VisitForm({ clubId }: { clubId: string }) {
             <fieldset>
               <legend><span>{club.collectGender ? "03" : "02"}</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>내 나이가 들어가는 범위를 선택해요.</small></div></legend>
               <div className="choice-grid age-grid">
-                {AGES.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" name="ageGroup" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}
+                {AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" name="ageGroup" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}
               </div>
             </fieldset>
           )}

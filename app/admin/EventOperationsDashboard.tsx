@@ -11,6 +11,7 @@ import {
   isInactiveEventStatus,
   resolveEventRange,
 } from "../../lib/event-lifecycle";
+import { AGE_GROUP_OPTIONS } from "../../lib/tour";
 
 type Club = {
   id: string;
@@ -46,6 +47,7 @@ type EventItem = {
   status: string;
   inviteToken: string;
   location: string;
+  stampEnabled: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
   deletedAt?: string | null;
@@ -69,6 +71,17 @@ type ShareQr = {
 type StatItem = { label: string; total: number };
 type RecentItem = { id: string; clubName: string; participantName: string; gender: string | null; ageGroup: string | null; createdAt: string };
 type Stats = { gender: StatItem[]; age: StatItem[]; recent: RecentItem[] };
+type ManualRecord = {
+  id: string;
+  participantName: string;
+  contactInfo: string;
+  affiliation: string;
+  gender: string | null;
+  ageGroup: string | null;
+  visitedAt: string | null;
+  clubs: string[];
+  stampPoints: string[];
+};
 
 type DeletionImpact = {
   clubCount: number;
@@ -96,9 +109,10 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   const [selectedId, setSelectedId] = useState("");
   const [eventView, setEventView] = useState<EventView>("active");
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
+  const [manualRecords, setManualRecords] = useState<ManualRecord[]>([]);
   const [statsReloadToken, setStatsReloadToken] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<"event" | "club" | "editClub" | "stampPoint" | "qr" | null>(null);
+  const [modal, setModal] = useState<"event" | "editEvent" | "manualRecord" | "club" | "editClub" | "stampPoint" | "qr" | null>(null);
   const [editingClub, setEditingClub] = useState<Club | null>(null);
   const [shareQr, setShareQr] = useState<ShareQr | null>(null);
   const [qrData, setQrData] = useState("");
@@ -181,6 +195,23 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       });
     return () => controller.abort();
   }, [eventView, selected?.id, selected?.responseCount, statsReloadToken]);
+
+  useEffect(() => {
+    if (eventView !== "active" || !selected?.id) {
+      setManualRecords([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/manual-records?eventId=${encodeURIComponent(selected.id)}`, { cache: "no-store", signal: controller.signal })
+      .then((response) => readApiResponse<{ records?: ManualRecord[] }>(response, "종이 접수 기록을 불러오지 못했습니다."))
+      .then((data) => setManualRecords(data.records ?? []))
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+          setError(friendlyError(caught, "종이 접수 기록을 불러오지 못했습니다."));
+        }
+      });
+    return () => controller.abort();
+  }, [eventView, selected?.id, selected?.participantCount, statsReloadToken]);
 
   function notify(message: string) {
     setToast(message);
@@ -330,23 +361,85 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       const response = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(form)),
+        body: JSON.stringify({ ...Object.fromEntries(form), stampEnabled: form.get("stampEnabled") === "on" }),
       });
       const data = await readApiResponse<{ event?: EventItem }>(response, "새 행사를 만들지 못했습니다.");
       if (!data.event) throw new Error("행사 생성 결과를 확인하지 못했습니다.");
       setEventView("active");
       await loadEvents(data.event.id, "active");
       notify("새 행사를 만들었습니다.");
-      await openShareQr({
-        title: data.event.name,
-        kicker: "EVENT INVITE QR",
-        intro: "참가자가 처음 스캔해 행사 정보와 이름을 등록하는 초대 QR입니다.",
-        label: "행사 참가 등록",
-        link: `${window.location.origin}/join/${data.event.inviteToken}`,
-        filename: `${data.event.name}-초대-QR.png`,
-      });
+      if (data.event.stampEnabled) await openEventQr(data.event);
+      else setModal(null);
     } catch (caught) {
       setError(friendlyError(caught, "새 행사를 만들지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."));
+    } finally {
+      finishOperation(operation);
+    }
+  }
+
+  async function updateEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    const operation = "update-event";
+    if (!beginOperation(operation)) return;
+    setError("");
+    try {
+      const form = new FormData(event.currentTarget);
+      const response = await fetch(`/api/events/${encodeURIComponent(selected.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          description: form.get("description"),
+          startDate: form.get("startDate"),
+          endDate: form.get("endDate"),
+          institution: form.get("institution"),
+          location: form.get("location"),
+          stampEnabled: form.get("stampEnabled") === "on",
+        }),
+      });
+      await readApiResponse(response, "행사 설정을 저장하지 못했습니다.");
+      setModal(null);
+      await loadEvents(selected.id, "active");
+      setStatsReloadToken((current) => current + 1);
+      notify("행사 설정을 저장했습니다.");
+    } catch (caught) {
+      setError(friendlyError(caught, "행사 설정을 저장하지 못했습니다. 다시 시도해 주세요."));
+    } finally {
+      finishOperation(operation);
+    }
+  }
+
+  async function createManualRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    const operation = "create-manual-record";
+    if (!beginOperation(operation)) return;
+    setError("");
+    try {
+      const form = new FormData(event.currentTarget);
+      const response = await fetch("/api/manual-records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: selected.id,
+          participantName: form.get("participantName"),
+          contactInfo: form.get("contactInfo"),
+          affiliation: form.get("affiliation"),
+          visitedAt: form.get("visitedAt"),
+          gender: form.get("gender"),
+          ageGroup: form.get("ageGroup"),
+          clubIds: form.getAll("clubIds"),
+          stampPointIds: form.getAll("stampPointIds"),
+        }),
+      });
+      await readApiResponse(response, "종이 접수 기록을 저장하지 못했습니다.");
+      setModal(null);
+      await loadEvents(selected.id, "active");
+      setStatsReloadToken((current) => current + 1);
+      notify("종이 접수 기록을 온라인 기록에 등록했습니다.");
+    } catch (caught) {
+      setError(friendlyError(caught, "종이 접수 기록을 저장하지 못했습니다. 다시 시도해 주세요."));
     } finally {
       finishOperation(operation);
     }
@@ -536,9 +629,9 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
         <nav className="side-nav" aria-label="관리자 메뉴">
           <a href="#overview" className="active"><span>⌂</span>대시보드</a>
           <a href="#events"><span>◇</span>행사 관리</a>
-          <a href="#clubs"><span>⌗</span>동아리 스탬프</a>
-          <a href="#stamps"><span>＋</span>추가 지점</a>
-          <a href="#responses"><span>≡</span>응답 내역</a>
+          {selected?.stampEnabled && <a href="#clubs"><span>⌗</span>동아리 스탬프</a>}
+          {selected?.stampEnabled && <a href="#stamps"><span>＋</span>추가 지점</a>}
+          <a href="#paper-records"><span>≡</span>현장 기록</a>
         </nav>
         <div className="sidebar-help">
           <strong>행사별 독립 관리</strong>
@@ -589,9 +682,10 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 </div>
                 <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span></div>
                 <div className="spotlight-actions">
-                  <button disabled={Boolean(busyAction)} onClick={() => setModal("club")}>동아리 추가 <span>＋</span></button>
-                  <button className="secondary-spotlight" disabled={qrBusy} onClick={() => openEventQr(selected)}>초대 QR <span>⌗</span></button>
-                  <a href="#stamps">추가 지점 관리 <span>＋</span></a>
+                  <button disabled={Boolean(busyAction)} onClick={() => setModal("editEvent")}>행사 설정 <span>⚙</span></button>
+                  <a className="secondary-spotlight" href={`/admin/paper/${selected.id}`}>종이 기록지 <span>▤</span></a>
+                  <button className="secondary-spotlight" disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>종이 기록 등록 <span>＋</span></button>
+                  {selected.stampEnabled && <button disabled={qrBusy} onClick={() => openEventQr(selected)}>초대 QR <span>⌗</span></button>}
                 </div>
               </div>
 
@@ -600,10 +694,11 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 <EventFact label="기간" value={selectedRange ? formatCompactPeriod(selectedRange.startDate, selectedRange.endDate) : "—"} note="시작일 – 종료일" symbol="◷" />
                 <EventFact label="장소" value={selected.location || "장소 미정"} note={selected.institution} symbol="⌖" />
                 <EventFact label="참가자" value={`${selected.participantCount.toLocaleString()}명`} note="행사 등록 기준" symbol="↗" />
-                <EventFact label="동아리" value={`${selected.clubs.length.toLocaleString()}개`} note="기본 스탬프 QR" symbol="◫" />
+                <EventFact label="스탬프 행사" value={selected.stampEnabled ? "사용" : "사용 안 함"} note="행사 설정에서 변경" symbol="◫" />
                 <EventFact label="최근 활동" value={formatSummaryActivity(selected.updatedAt || selected.createdAt)} note={selected.updatedAt ? "최근 변경" : "행사 생성"} symbol="↻" />
               </div>
 
+              {selected.stampEnabled && <>
               <section className="dashboard-section" id="clubs">
                 <div className="dashboard-heading">
                   <div><p>기본 스탬프 · 동아리 QR</p><h2>동아리 참여 스탬프</h2></div>
@@ -674,6 +769,15 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 <div className="panel-heading"><div><p>최근 활동</p><h2>최근 응답</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
                 <RecentTable items={stats.recent} />
               </section>
+              </>}
+
+              <section className="panel manual-record-panel" id="paper-records">
+                <div className="panel-heading">
+                  <div><p>현장 접수 · PAPER RECORDS</p><h2>종이 접수 기록</h2></div>
+                  <div className="heading-actions"><a className="subtle-button" href={`/admin/paper/${selected.id}`}>기록지 인쇄</a><button className="subtle-button" disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>＋ 기록 등록</button></div>
+                </div>
+                <ManualRecordTable records={manualRecords} stampEnabled={selected.stampEnabled} />
+              </section>
 
             </div>
           )}
@@ -681,6 +785,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       </section>
 
       {modal === "event" && <EventModal busy={busyAction === "create-event"} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={createEvent} />}
+      {modal === "editEvent" && selected && <EventModal event={selected} busy={busyAction === "update-event"} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={updateEvent} />}
+      {modal === "manualRecord" && selected && <ManualRecordModal event={selected} busy={busyAction === "create-manual-record"} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={createManualRecord} />}
       {modal === "club" && selected && <ClubModal busy={busyAction === "create-club"} eventName={selected.name} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={createClub} />}
       {modal === "editClub" && selected && editingClub && <ClubModal busy={busyAction === `update-club:${editingClub.id}`} eventName={selected.name} club={editingClub} onClose={() => { if (!busyAction) { setModal(null); setEditingClub(null); } }} onSubmit={updateClub} />}
       {modal === "stampPoint" && selected && <StampPointModal busy={busyAction === "create-stamp-point"} eventName={selected.name} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={createStampPoint} />}
@@ -743,6 +849,14 @@ function RecentTable({ items }: { items: RecentItem[] }) {
   return <div className="table-wrap"><table><thead><tr><th>이름</th><th>동아리</th><th>성별</th><th>연령 구분</th><th>입력 일시</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><span className="table-dot" />{item.participantName || "—"}</td><td>{item.clubName}</td><td>{item.gender || "—"}</td><td>{item.ageGroup || "—"}</td><td>{formatDateTime(item.createdAt)}</td></tr>)}</tbody></table></div>;
 }
 
+function ManualRecordTable({ records, stampEnabled }: { records: ManualRecord[]; stampEnabled: boolean }) {
+  if (!records.length) return <div className="table-empty">종이 기록지로 접수한 참가자를 등록하면 온라인 기록과 함께 관리할 수 있습니다.</div>;
+  return <div className="table-wrap"><table><thead><tr><th>이름</th><th>학번·연락처</th><th>소속</th><th>방문 시간</th>{stampEnabled && <th>확인 항목</th>}</tr></thead><tbody>{records.map((record) => {
+    const checks = [...record.clubs, ...record.stampPoints];
+    return <tr key={record.id}><td><span className="table-dot" />{record.participantName}</td><td>{record.contactInfo || "—"}</td><td>{record.affiliation || "—"}</td><td>{formatDateTime(record.visitedAt || "")}</td>{stampEnabled && <td>{checks.length ? checks.join(", ") : "—"}</td>}</tr>;
+  })}</tbody></table></div>;
+}
+
 function ModalShell({ title, kicker, closeDisabled = false, onClose, children }: { title: string; kicker: string; closeDisabled?: boolean; onClose: () => void; children: React.ReactNode }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -783,14 +897,19 @@ function ModalShell({ title, kicker, closeDisabled = false, onClose, children }:
   return <div className="modal-backdrop" role="presentation"><dialog ref={dialogRef} className="modal" open aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}><button className="modal-close" disabled={closeDisabled} onClick={onClose} aria-label="닫기">×</button><p className="modal-kicker">{kicker}</p><h2 id={titleId}>{title}</h2>{children}</dialog></div>;
 }
 
-function EventModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function EventModal({ event, busy, onClose, onSubmit }: { event?: EventItem; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const today = getSeoulDateKey();
-  return <ModalShell title="새 행사 만들기" kicker="행사 정보" closeDisabled={busy} onClose={onClose}><p className="modal-intro">기본 정보를 입력하면 참가자 초대 QR이 자동으로 만들어집니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus maxLength={100} placeholder="예: 2026 여름 공동체 주간" /></label><label>행사 설명 <small>선택</small><textarea name="description" rows={3} maxLength={1000} placeholder="참가자 화면에 보여줄 짧은 소개" /></label><div className="form-row"><label>시작일<input name="startDate" type="date" defaultValue={today} required /></label><label>종료일<input name="endDate" type="date" defaultValue={today} required /></label></div><div className="form-row"><label>기관명<input name="institution" maxLength={100} defaultValue="NCHM" /></label><label>장소<input name="location" maxLength={200} placeholder="예: 본관 1층" /></label></div><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "행사 만드는 중…" : "행사와 초대 QR 만들기 →"}</button></div></form></ModalShell>;
+  const editing = Boolean(event);
+  return <ModalShell title={editing ? "행사 설정" : "새 행사 만들기"} kicker="행사 정보" closeDisabled={busy} onClose={onClose}><p className="modal-intro">행사 기본 정보와 스탬프 기능 사용 여부를 설정합니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><label>행사명<input name="name" required autoFocus maxLength={100} defaultValue={event?.name} placeholder="예: 2026 여름 공동체 주간" /></label><label>행사 설명 <small>선택</small><textarea name="description" rows={3} maxLength={1000} defaultValue={event?.description} placeholder="참가자에게 보여줄 짧은 소개" /></label><div className="form-row"><label>시작일<input name="startDate" type="date" defaultValue={event?.startDate || event?.eventDate || today} required /></label><label>종료일<input name="endDate" type="date" defaultValue={event?.endDate || event?.eventDate || today} required /></label></div><div className="form-row"><label>기관명<input name="institution" maxLength={100} defaultValue={event?.institution || "NCHM"} /></label><label>장소<input name="location" maxLength={200} defaultValue={event?.location} placeholder="예: 본관 1층" /></label></div><label className="event-feature-toggle"><input type="checkbox" name="stampEnabled" defaultChecked={event?.stampEnabled ?? false} /><span><i aria-hidden="true" /><strong>스탬프 행사 사용</strong><small>켜면 참가자 초대 QR, 동아리·부스 스탬프 메뉴가 표시됩니다. 나중에 꺼도 기존 기록은 보관됩니다.</small></span></label><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "저장 중…" : editing ? "설정 저장 →" : "행사 만들기 →"}</button></div></form></ModalShell>;
+}
+
+function ManualRecordModal({ event, busy, onClose, onSubmit }: { event: EventItem; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <ModalShell title="종이 접수 기록 등록" kicker="현장 기록 온라인 전환" closeDisabled={busy} onClose={onClose}><p className="modal-intro"><strong>{event.name}</strong>의 종이 기록지 내용을 옮겨 적습니다.</p><form className="modal-form manual-record-form" aria-busy={busy} onSubmit={onSubmit}><label>참가자 이름<input name="participantName" required autoFocus maxLength={30} /></label><div className="form-row"><label>학번 또는 연락처<input name="contactInfo" maxLength={100} /></label><label>소속<input name="affiliation" maxLength={100} /></label></div><label>방문 시간<input name="visitedAt" type="datetime-local" defaultValue={defaultLocalDateTime()} /></label><div className="form-row"><label>성별 <small>선택</small><select name="gender" defaultValue=""><option value="">선택 안 함</option><option value="여성">여성</option><option value="남성">남성</option><option value="응답하지 않음">응답하지 않음</option></select></label><label>연령 구분 <small>선택</small><select name="ageGroup" defaultValue=""><option value="">선택 안 함</option>{AGE_GROUP_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.value} ({option.detail})</option>)}</select></label></div>{event.stampEnabled && <fieldset><legend>종이 기록지에서 확인된 스탬프</legend><p className="manual-fieldset-note">확인된 동아리·부스만 선택하세요.</p><div className="manual-check-grid">{event.clubs.map((club) => <label className="paper-control-check" key={club.id}><input type="checkbox" name="clubIds" value={club.id} /><span>{club.name}</span></label>)}{event.stampPoints.filter((point) => point.active).map((point) => <label className="paper-control-check" key={point.id}><input type="checkbox" name="stampPointIds" value={point.id} /><span>{point.name}</span></label>)}</div>{!event.clubs.length && !event.stampPoints.some((point) => point.active) && <small>등록된 동아리나 추가 지점이 없습니다.</small>}</fieldset>}<div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "기록 저장 중…" : "온라인 기록에 등록 →"}</button></div></form></ModalShell>;
 }
 
 function ClubModal({ eventName, club, busy, onClose, onSubmit }: { eventName: string; club?: Club; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const editing = Boolean(club);
-  return <ModalShell title={editing ? "동아리 수정" : "동아리 스탬프 추가"} kicker={editing ? "동아리 정보 수정" : "동아리 정보"} closeDisabled={busy} onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 동아리 정보와 QR 스캔 후 보여줄 안내를 설정합니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><div className="form-row club-name-row"><label>동아리명<input name="name" required autoFocus maxLength={60} defaultValue={club?.name} placeholder="예: 청년 찬양팀" /></label><label>도장 모양<input name="stampEmoji" maxLength={8} defaultValue={club?.stampEmoji || "⭐"} placeholder="⭐" /></label></div><label>동아리 소개 <small>참여 전 표시</small><input name="description" maxLength={200} defaultValue={club?.description} placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><label>스탬프 완료 멘트 <small>선택</small><input name="stampMessage" maxLength={120} defaultValue={club?.stampMessage} placeholder="예: 미션 성공! 선생님께 화면을 보여 주세요." /></label><label>요건·제출 안내 <small>선택</small><textarea name="submissionGuide" rows={3} maxLength={300} defaultValue={club?.submissionGuide} placeholder="예: 활동지 작성 후 본관 1층 안내 부스로 보내 주세요." /></label><fieldset disabled={busy}><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked={club?.collectGender ?? true} /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked={club?.collectAge ?? true} /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기</small></span></label></fieldset><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "저장 중…" : editing ? "수정 내용 저장 →" : "동아리 스탬프 QR 만들기 →"}</button></div></form></ModalShell>;
+  return <ModalShell title={editing ? "동아리 수정" : "동아리 스탬프 추가"} kicker={editing ? "동아리 정보 수정" : "동아리 정보"} closeDisabled={busy} onClose={onClose}><p className="modal-intro"><strong>{eventName}</strong>의 동아리 정보와 QR 스캔 후 보여줄 안내를 설정합니다.</p><form className="modal-form" aria-busy={busy} onSubmit={onSubmit}><div className="form-row club-name-row"><label>동아리명<input name="name" required autoFocus maxLength={60} defaultValue={club?.name} placeholder="예: 청년 찬양팀" /></label><label>도장 모양<input name="stampEmoji" maxLength={8} defaultValue={club?.stampEmoji || "⭐"} placeholder="⭐" /></label></div><label>동아리 소개 <small>참여 전 표시</small><input name="description" maxLength={200} defaultValue={club?.description} placeholder="참가자 스탬프 화면에 보여줄 짧은 설명" /></label><label>스탬프 완료 멘트 <small>선택</small><input name="stampMessage" maxLength={120} defaultValue={club?.stampMessage} placeholder="예: 미션 성공! 선생님께 화면을 보여 주세요." /></label><label>요건·제출 안내 <small>선택</small><textarea name="submissionGuide" rows={3} maxLength={300} defaultValue={club?.submissionGuide} placeholder="예: 활동지 작성 후 본관 1층 안내 부스로 보내 주세요." /></label><fieldset disabled={busy}><legend>초대 QR 없이 바로 들어온 참가자에게 받을 정보</legend><label className="check-card"><input type="checkbox" name="collectGender" defaultChecked={club?.collectGender ?? true} /><span><i>✓</i><strong>성별</strong><small>여성 · 남성 · 응답하지 않음</small></span></label><label className="check-card"><input type="checkbox" name="collectAge" defaultChecked={club?.collectAge ?? true} /><span><i>✓</i><strong>연령 구분</strong><small>유아 · 초등 · 중등 · 고등 · 청년 · 후기 · 일반</small></span></label></fieldset><div className="modal-actions"><button type="button" disabled={busy} onClick={onClose}>취소</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "저장 중…" : editing ? "수정 내용 저장 →" : "동아리 스탬프 QR 만들기 →"}</button></div></form></ModalShell>;
 }
 
 function StampPointModal({ eventName, busy, onClose, onSubmit }: { eventName: string; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
@@ -929,5 +1048,20 @@ function escapeHtml(value: string) {
 
 function formatDateTime(value: string) {
   const parsed = value.includes("T") ? new Date(value) : new Date(`${value.replace(" ", "T")}Z`);
+  if (Number.isNaN(parsed.getTime())) return "—";
   return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(parsed);
+}
+
+function defaultLocalDateTime() {
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}T${value.hour}:${value.minute}`;
 }

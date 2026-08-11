@@ -1,5 +1,14 @@
 export const GENDERS = new Set(["여성", "남성", "응답하지 않음"]);
-export const AGE_GROUPS = new Set(["유아", "초등", "중등", "고등", "청년", "후기"]);
+export const AGE_GROUP_OPTIONS = [
+  { value: "유아", detail: "8세 이하" },
+  { value: "초등", detail: "9~13세" },
+  { value: "중등", detail: "14~16세" },
+  { value: "고등", detail: "17~19세" },
+  { value: "청년", detail: "20~24세" },
+  { value: "후기", detail: "25~39세" },
+  { value: "일반", detail: "40세 이상" },
+] as const;
+export const AGE_GROUPS = new Set<string>(AGE_GROUP_OPTIONS.map((option) => option.value));
 
 type EventWindow = {
   status: string;

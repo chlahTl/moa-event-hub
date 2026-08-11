@@ -13,6 +13,7 @@ export async function GET(
     await ensureDatabase();
     const event = await findEventByInviteToken(inviteToken);
     if (!event) return Response.json({ error: "유효하지 않은 행사 초대 QR입니다." }, { status: 404 });
+    if (!event.stampEnabled) return Response.json({ error: "이 행사는 스탬프 참여를 사용하지 않습니다." }, { status: 410 });
     const availability = getEventAvailability(event);
     if (!availability.available) {
       return Response.json({ error: availability.message }, { status: 410 });

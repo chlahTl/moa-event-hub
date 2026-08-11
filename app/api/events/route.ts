@@ -88,6 +88,7 @@ export async function POST(request: Request) {
     const description = stringField(body, "description");
     const institution = stringField(body, "institution") || "NCHM";
     const location = stringField(body, "location");
+    const stampEnabled = body.stampEnabled === true || stringField(body, "stampEnabled") === "on";
     if (!name || !startDate || !endDate) {
       return apiError("행사명과 행사 기간을 입력해 주세요.", 400);
     }
@@ -118,6 +119,7 @@ export async function POST(request: Request) {
         endDate,
         location,
         status,
+        stampEnabled,
         inviteToken: createPublicToken(),
         updatedAt: now,
       })

@@ -2,10 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { clubs, events, responses } from "../../../db/schema";
 import { apiError, internalApiError, readJsonObject, stringField } from "../../../lib/api-response";
-import { getEventAvailability } from "../../../lib/tour";
-
-const GENDERS = new Set(["여성", "남성", "응답하지 않음"]);
-const AGE_GROUPS = new Set(["유아", "초등", "중등", "고등", "청년", "후기"]);
+import { AGE_GROUPS, GENDERS, getEventAvailability } from "../../../lib/tour";
 
 export async function POST(request: Request) {
   try {
@@ -29,6 +26,7 @@ export async function POST(request: Request) {
       .where(and(eq(clubs.id, clubId), isNull(events.deletedAt))).limit(1);
     if (!target) return Response.json({ error: "동아리를 찾을 수 없습니다." }, { status: 404 });
     const { club, event } = target;
+    if (!event.stampEnabled) return apiError("이 행사는 스탬프 참여를 사용하지 않습니다.", 410);
     const availability = getEventAvailability(event);
     if (!availability.available) return Response.json({ error: availability.message }, { status: 410 });
 

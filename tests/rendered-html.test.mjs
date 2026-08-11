@@ -48,19 +48,26 @@ test("uses native navigation links that work in the vinext client", async () => 
 });
 
 test("keeps participant names and club responses connected", async () => {
-  const [visitForm, responseRoute, schema, exportRoute, dashboard] = await Promise.all([
+  const [visitForm, tourForm, responseRoute, tourOptions, schema, exportRoute, dashboard] = await Promise.all([
     readFile(new URL("../app/visit/[clubId]/GuidedClubVisit.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/join/[inviteToken]/OfflineReadyClubTour.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/responses/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/tour.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/export/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(visitForm, /name="participantName"/);
-  assert.match(visitForm, /8세 이하/);
-  assert.match(visitForm, /25~39세/);
+  assert.match(visitForm, /AGE_GROUP_OPTIONS/);
+  assert.match(tourForm, /AGE_GROUP_OPTIONS/);
+  assert.match(tourOptions, /8세 이하/);
+  assert.match(tourOptions, /25~39세/);
+  assert.match(tourOptions, /일반/);
+  assert.match(tourOptions, /40세 이상/);
   assert.match(responseRoute, /participantName/);
   assert.match(responseRoute, /clubId/);
+  assert.match(responseRoute, /AGE_GROUPS/);
   assert.match(schema, /participantName: text\("participant_name"\)/);
   assert.match(exportRoute, /"이름"/);
   assert.match(dashboard, /item\.participantName/);

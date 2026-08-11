@@ -12,6 +12,7 @@ export const events = sqliteTable("events", {
   endDate: text("end_date"),
   location: text("location").notNull().default(""),
   status: text("status").notNull().default("active"),
+  stampEnabled: integer("stamp_enabled", { mode: "boolean" }).notNull().default(false),
   inviteToken: text("invite_token"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at"),
@@ -120,6 +121,10 @@ export const participants = sqliteTable("participants", {
   participantName: text("participant_name").notNull(),
   gender: text("gender"),
   ageGroup: text("age_group"),
+  contactInfo: text("contact_info").notNull().default(""),
+  affiliation: text("affiliation").notNull().default(""),
+  visitedAt: text("visited_at"),
+  recordSource: text("record_source").notNull().default("qr"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [

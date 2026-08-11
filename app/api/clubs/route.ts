@@ -38,13 +38,14 @@ export async function POST(request: Request) {
 
     await ensureDatabase();
     const db = getDb();
-    const parent = await db.select({ id: events.id }).from(events)
+    const parent = await db.select({ id: events.id, stampEnabled: events.stampEnabled }).from(events)
       .where(and(
         eq(events.id, eventId),
         eq(events.ownerUserId, authorization.user.id),
         isNull(events.deletedAt),
       )).limit(1);
     if (!parent.length) return apiError("행사를 찾을 수 없습니다.", 404);
+    if (!parent[0].stampEnabled) return apiError("스탬프 사용을 켠 행사에서만 동아리 QR을 만들 수 있습니다.", 409);
 
     const [club] = await db
       .insert(clubs)

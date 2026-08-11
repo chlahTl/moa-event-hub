@@ -14,9 +14,10 @@ export async function GET(request: Request) {
     if (!isUuid(eventId)) return apiError("행사 정보 형식을 확인해 주세요.", 400);
     await ensureDatabase();
     const db = getDb();
-    const [event] = await db.select({ id: events.id }).from(events)
+    const [event] = await db.select({ id: events.id, stampEnabled: events.stampEnabled }).from(events)
       .where(and(eq(events.id, eventId), eq(events.ownerUserId, authorization.user.id), isNull(events.deletedAt))).limit(1);
     if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
+    if (!event.stampEnabled) return apiError("스탬프 사용을 켠 행사에서만 추가 지점을 관리할 수 있습니다.", 409);
     const points = await db
       .select()
       .from(stampPoints)
@@ -49,9 +50,10 @@ export async function POST(request: Request) {
 
     await ensureDatabase();
     const db = getDb();
-    const [event] = await db.select({ id: events.id }).from(events)
+    const [event] = await db.select({ id: events.id, stampEnabled: events.stampEnabled }).from(events)
       .where(and(eq(events.id, eventId), eq(events.ownerUserId, authorization.user.id), isNull(events.deletedAt))).limit(1);
     if (!event) return Response.json({ error: "행사를 찾을 수 없습니다." }, { status: 404 });
+    if (!event.stampEnabled) return apiError("스탬프 사용을 켠 행사에서만 추가 지점을 만들 수 있습니다.", 409);
     const [lastPosition] = await db
       .select({ value: sql<number>`coalesce(max(${stampPoints.position}), 0)` })
       .from(stampPoints)

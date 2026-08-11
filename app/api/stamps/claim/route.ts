@@ -35,6 +35,9 @@ export async function POST(request: Request) {
     if (!target) {
       return Response.json({ error: clubId ? "유효하지 않은 동아리 QR입니다." : "유효하지 않은 추가 지점 QR입니다." }, { status: 404 });
     }
+    if (!target.event.stampEnabled) {
+      return Response.json({ error: "이 행사는 스탬프 참여를 사용하지 않습니다." }, { status: 410 });
+    }
     const targetClub = "club" in target ? target.club : null;
     const targetPoint = "point" in target ? target.point : null;
     if (targetPoint && !targetPoint.active) {
