@@ -719,6 +719,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                         <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button disabled={qrBusy} onClick={() => openClubQr(club)}>기본 스탬프 QR →</button></div>
                         <div className="club-manage-actions">
                           <button disabled={Boolean(busyAction)} onClick={() => openClubEdit(club)}>수정</button>
+                          <a href={`/admin/paper/${selected.id}?clubId=${club.id}`}>종이 기록지</a>
                           <a href={`/api/export?eventId=${selected.id}&clubId=${club.id}`}>실적 CSV ↓</a>
                           <button className="danger" disabled={Boolean(busyAction)} onClick={() => void deleteClub(club)}>{busyAction === `delete-club:${club.id}` ? "삭제 중…" : "삭제"}</button>
                         </div>

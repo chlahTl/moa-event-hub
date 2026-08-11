@@ -132,6 +132,7 @@ test("club operations support custom guidance, safe offline retry, editing and e
   assert.match(exportRoute, /eq\(responses\.clubId, clubId\)/);
   assert.match(dashboard, /요건·제출 안내/);
   assert.match(dashboard, /실적 CSV/);
+  assert.match(dashboard, /\/admin\/paper\/\$\{selected\.id\}\?clubId=\$\{club\.id\}/);
   assert.match(dashboard, /window\.confirm/);
   assert.match(scanner, /moa-pending-stamps/);
   assert.match(scanner, /인터넷이 돌아오면 자동 등록/);
@@ -167,4 +168,19 @@ test("stamp APIs keep identity server-side and validate event ownership", async 
   assert.match(scanner, /clubId/);
   assert.match(clubVisit, /JSON\.stringify\(\{ clubId \}\)/);
   assert.match(clubVisit, /stampSuccess/);
+});
+
+test("creates a separate printable record sheet for each club", async () => {
+  const [paperPage, paperSheet, dashboard] = await Promise.all([
+    readFile(new URL("../app/admin/paper/[eventId]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/paper/[eventId]/PaperRecordSheet.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(paperPage, /searchParams/);
+  assert.match(paperPage, /eventClubs\.find\(\(club\) => club\.id === clubId\)/);
+  assert.match(paperPage, /selectedClub \? \[selectedClub\]/);
+  assert.match(paperSheet, /동아리별 종이 접수 양식/);
+  assert.match(paperSheet, /club\?\.collectGender/);
+  assert.match(paperSheet, /club\?\.collectAge/);
+  assert.match(dashboard, /종이 기록지<\/a>/);
 });
