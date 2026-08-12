@@ -14,6 +14,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "모아 | 행사 참여를 한곳에",
     description: "행사와 부스·동아리별 참여 정보를 QR로 받고 자동으로 분류·집계합니다.",
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
     openGraph: {
       title: "모아 | 행사 참여를 한곳에",
       description: "행사 생성부터 부스별 QR, 참여 통계와 엑셀 내려받기까지.",
