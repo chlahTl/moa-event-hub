@@ -26,16 +26,6 @@ export async function POST(request: Request) {
     if (stampEmoji.length > 8) return apiError("스탬프 표시는 8자 이내로 입력해 주세요.", 400);
     if (stampMessage.length > 120) return apiError("완료 문구는 120자 이내로 입력해 주세요.", 400);
     if (submissionGuide.length > 300) return apiError("제출 안내는 300자 이내로 입력해 주세요.", 400);
-    if ((body.collectGender !== undefined && typeof body.collectGender !== "boolean") ||
-        (body.collectAge !== undefined && typeof body.collectAge !== "boolean")) {
-      return apiError("수집 정보 설정을 확인해 주세요.", 400);
-    }
-    const collectGender = typeof body.collectGender === "boolean" ? body.collectGender : true;
-    const collectAge = typeof body.collectAge === "boolean" ? body.collectAge : true;
-    if (!collectGender && !collectAge) {
-      return Response.json({ error: "받을 정보를 하나 이상 선택해 주세요." }, { status: 400 });
-    }
-
     await ensureDatabase();
     const db = getDb();
     const parent = await db.select({ id: events.id, stampEnabled: events.stampEnabled }).from(events)
@@ -57,8 +47,8 @@ export async function POST(request: Request) {
         stampEmoji: normalizeStampEmoji(stampEmoji),
         stampMessage,
         submissionGuide,
-        collectGender,
-        collectAge,
+        collectGender: true,
+        collectAge: true,
       })
       .returning();
     return Response.json({ club: { ...club, responseCount: 0 } }, { status: 201 });

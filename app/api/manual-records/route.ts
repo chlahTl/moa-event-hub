@@ -82,8 +82,8 @@ export async function POST(request: Request) {
     if (participantName.length > 30) return apiError("참가자 이름은 30자 이내로 입력해 주세요.", 400);
     if (contactInfo.length > 100) return apiError("학번 또는 연락처는 100자 이내로 입력해 주세요.", 400);
     if (affiliation.length > 100) return apiError("소속은 100자 이내로 입력해 주세요.", 400);
-    if (gender && !GENDERS.has(gender)) return apiError("성별 정보를 확인해 주세요.", 400);
-    if (ageGroup && !AGE_GROUPS.has(ageGroup)) return apiError("연령 구분을 확인해 주세요.", 400);
+    if (!GENDERS.has(gender)) return apiError("성별을 선택해 주세요.", 400);
+    if (!AGE_GROUPS.has(ageGroup)) return apiError("연령 구분을 선택해 주세요.", 400);
     if (clubIds.length > 100 || stampPointIds.length > 100 || [...clubIds, ...stampPointIds].some((id) => !isUuid(id))) {
       return apiError("스탬프 선택 정보를 확인해 주세요.", 400);
     }
@@ -121,8 +121,8 @@ export async function POST(request: Request) {
       eventId,
       deviceTokenHash: `manual:${crypto.randomUUID()}`,
       participantName,
-      gender: gender || null,
-      ageGroup: ageGroup || null,
+      gender,
+      ageGroup,
       contactInfo,
       affiliation,
       visitedAt: timestamp,
@@ -143,8 +143,8 @@ export async function POST(request: Request) {
           eventId,
           clubId: club.id,
           participantName,
-          gender: club.collectGender ? gender || null : null,
-          ageGroup: club.collectAge ? ageGroup || null : null,
+          gender,
+          ageGroup,
           createdAt: timestamp,
         });
       }

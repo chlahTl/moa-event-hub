@@ -1,7 +1,7 @@
 import { ensureDatabase } from "../../../../db";
 import { hashDeviceToken, readDeviceToken } from "../../../../lib/participant-session";
 import { buildTourPayload, findEventByInviteToken, findParticipant } from "../../../../lib/tour-data";
-import { getEventAvailability } from "../../../../lib/tour";
+import { AGE_GROUPS, GENDERS, getEventAvailability } from "../../../../lib/tour";
 import { internalApiError } from "../../../../lib/api-response";
 
 export async function GET(
@@ -20,7 +20,10 @@ export async function GET(
     }
 
     const token = readDeviceToken(request);
-    const participant = token ? await findParticipant(event.id, await hashDeviceToken(token)) : null;
+    const savedParticipant = token ? await findParticipant(event.id, await hashDeviceToken(token)) : null;
+    const participant = savedParticipant && GENDERS.has(savedParticipant.gender ?? "") && AGE_GROUPS.has(savedParticipant.ageGroup ?? "")
+      ? savedParticipant
+      : null;
     return Response.json(await buildTourPayload(event, participant), {
       headers: { "Cache-Control": "no-store" },
     });

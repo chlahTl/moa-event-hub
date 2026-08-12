@@ -181,7 +181,8 @@ test("creates a separate printable record sheet for each club", async () => {
   assert.match(paperPage, /eventClubs\.find\(\(club\) => club\.id === clubId\)/);
   assert.match(paperPage, /selectedClub \? \[selectedClub\]/);
   assert.match(paperSheet, /동아리별 종이 접수 양식/);
-  assert.match(paperSheet, /club\?\.collectGender/);
-  assert.match(paperSheet, /club\?\.collectAge/);
+  assert.match(paperSheet, /참가자 이름·성별·연령 구분은 필수 항목입니다/);
+  assert.doesNotMatch(paperSheet, /collectGender|collectAge/);
+  assert.doesNotMatch(dashboard, /name="collectGender"|name="collectAge"|선택 안 함/);
   assert.match(dashboard, /종이 기록지<\/a>/);
 });

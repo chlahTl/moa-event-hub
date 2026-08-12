@@ -13,14 +13,12 @@ type PaperEvent = {
 };
 
 type Booth = { id: string; name: string };
-type PaperClub = Booth & { collectGender: boolean; collectAge: boolean };
-type OptionalField = "contact" | "affiliation" | "gender" | "ageGroup" | "visitedAt" | "signature";
+type PaperClub = Booth;
+type OptionalField = "contact" | "affiliation" | "visitedAt" | "signature";
 
 const FIELD_LABELS: Record<OptionalField, string> = {
   contact: "학번 또는 연락처",
   affiliation: "소속",
-  gender: "성별",
-  ageGroup: "연령 구분",
   visitedAt: "방문 시간",
   signature: "확인자 서명",
 };
@@ -32,8 +30,6 @@ export default function PaperRecordSheet({ event, club, booths: initialBooths }:
   const [fields, setFields] = useState<Record<OptionalField, boolean>>({
     contact: true,
     affiliation: true,
-    gender: club?.collectGender ?? false,
-    ageGroup: club?.collectAge ?? false,
     visitedAt: true,
     signature: true,
   });
@@ -42,7 +38,7 @@ export default function PaperRecordSheet({ event, club, booths: initialBooths }:
     () => (Object.keys(fields) as OptionalField[]).filter((field) => fields[field]),
     [fields],
   );
-  const columnCount = visibleFields.length + 2;
+  const columnCount = visibleFields.length + 4;
 
   function updateBooth(id: string, name: string) {
     setBooths((current) => current.map((booth) => booth.id === id ? { ...booth, name } : booth));
@@ -69,6 +65,7 @@ export default function PaperRecordSheet({ event, club, booths: initialBooths }:
         </label>
         <fieldset>
           <legend>손으로 적을 항목</legend>
+          <p>참가자 이름·성별·연령 구분은 필수 항목입니다.</p>
           {(Object.keys(FIELD_LABELS) as OptionalField[]).map((field) => (
             <label className="paper-control-check" key={field}>
               <input type="checkbox" checked={fields[field]} onChange={(change) => setFields((current) => ({ ...current, [field]: change.target.checked }))} />
@@ -112,6 +109,8 @@ export default function PaperRecordSheet({ event, club, booths: initialBooths }:
                 <div className="paper-info-grid" style={{ gridTemplateColumns: `34px repeat(${columnCount - 1}, minmax(0, 1fr))` }}>
                   <div className="paper-row-number"><span>번호</span><strong>{String(index + 1).padStart(2, "0")}</strong></div>
                   <PaperBlank label="참가자 이름" />
+                  <PaperBlank label="성별" />
+                  <PaperBlank label="연령 구분" />
                   {visibleFields.map((field) => <PaperBlank label={FIELD_LABELS[field]} key={field} />)}
                 </div>
                 {event.stampEnabled && booths.some((booth) => booth.name.trim()) && (

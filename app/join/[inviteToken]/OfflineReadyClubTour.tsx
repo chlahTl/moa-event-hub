@@ -310,7 +310,7 @@ function JoinForm({ inviteToken, event, onJoined }: { inviteToken: string; event
   const [ageGroup, setAgeGroup] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const canSubmit = useMemo(() => Boolean(participantName.trim()), [participantName]);
+  const canSubmit = useMemo(() => Boolean(participantName.trim() && gender && ageGroup), [participantName, gender, ageGroup]);
 
   async function submit(eventForm: FormEvent) {
     eventForm.preventDefault();
@@ -344,10 +344,10 @@ function JoinForm({ inviteToken, event, onJoined }: { inviteToken: string; event
         <div className="privacy-note"><span>✓</span><p><strong>한 번만 입력하면 돼요.</strong><br />이후 지점 QR에서는 이름을 다시 묻지 않습니다.</p></div>
         <form className="visit-form" onSubmit={submit}>
           <fieldset><legend><span>01</span><div><strong>이름을 적어 주세요.</strong><small>행사 참가 확인에만 사용합니다.</small></div></legend><label className="visit-name-field"><span>내 이름</span><input value={participantName} onChange={(event) => setParticipantName(event.target.value)} maxLength={30} autoComplete="name" placeholder="예: 김모아" required autoFocus /></label></fieldset>
-          <fieldset><legend><span>02</span><div><strong>성별 <em>선택</em></strong><small>필요하지 않으면 건너뛰어도 됩니다.</small></div></legend><div className="choice-grid gender-grid">{GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" value={item} checked={gender === item} onChange={() => setGender(item)} /><span className="choice-check">✓</span><strong>{item}</strong></label>)}</div></fieldset>
-          <fieldset><legend><span>03</span><div><strong>연령 구분 <em>선택</em></strong><small>필요하지 않으면 건너뛰어도 됩니다.</small></div></legend><div className="choice-grid age-grid">{AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}</div></fieldset>
+          <fieldset><legend><span>02</span><div><strong>성별을 골라 주세요.</strong><small>반드시 한 가지를 선택해야 합니다.</small></div></legend><div className="choice-grid gender-grid">{GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" name="gender" value={item} checked={gender === item} onChange={() => setGender(item)} required /><span className="choice-check">✓</span><strong>{item}</strong></label>)}</div></fieldset>
+          <fieldset><legend><span>03</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>반드시 내 나이가 들어가는 범위를 선택해야 합니다.</small></div></legend><div className="choice-grid age-grid">{AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" name="ageGroup" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} required /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}</div></fieldset>
           {error && <p className="visit-error">{error}</p>}
-          <button className="visit-submit" type="submit" disabled={!canSubmit || submitting}>{submitting ? "참가 등록 중이에요…" : canSubmit ? "참가하기 · 스탬프 투어 시작 →" : "이름을 입력해 주세요"}</button>
+          <button className="visit-submit" type="submit" disabled={!canSubmit || submitting}>{submitting ? "참가 등록 중이에요…" : canSubmit ? "참가하기 · 스탬프 투어 시작 →" : "이름·성별·연령을 모두 입력해 주세요"}</button>
         </form>
       </section>
     </main>

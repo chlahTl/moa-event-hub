@@ -56,7 +56,12 @@ export async function GET(request: Request) {
       events: eventRows.map((event) => {
         const eventClubs = clubRows
           .filter((club) => club.eventId === event.id)
-          .map((club) => ({ ...club, responseCount: counts.get(club.id) ?? 0 }));
+          .map((club) => ({
+            ...club,
+            collectGender: true,
+            collectAge: true,
+            responseCount: counts.get(club.id) ?? 0,
+          }));
         return normalizeEvent({
           ...event,
           clubs: eventClubs,

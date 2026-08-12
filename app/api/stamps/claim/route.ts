@@ -3,7 +3,7 @@ import { ensureDatabase, getDb } from "../../../../db";
 import { clubStampRecords, clubs, events, participants, responses, stampPoints, stampRecords } from "../../../../db/schema";
 import { hashDeviceToken, readDeviceToken } from "../../../../lib/participant-session";
 import { buildTourPayload, findParticipant } from "../../../../lib/tour-data";
-import { getEventAvailability } from "../../../../lib/tour";
+import { AGE_GROUPS, GENDERS, getEventAvailability } from "../../../../lib/tour";
 import { apiError, internalApiError, readJsonObject, stringField } from "../../../../lib/api-response";
 
 export async function POST(request: Request) {
@@ -63,6 +63,9 @@ export async function POST(request: Request) {
         { status: otherEventParticipant ? 400 : 401 },
       );
     }
+    if (!GENDERS.has(participant.gender ?? "") || !AGE_GROUPS.has(participant.ageGroup ?? "")) {
+      return Response.json({ error: "행사 초대 QR에서 성별과 연령을 먼저 입력해 주세요." }, { status: 409 });
+    }
 
     if (targetClub) {
       const inserted = await db.insert(clubStampRecords).values({
@@ -78,8 +81,8 @@ export async function POST(request: Request) {
           eventId: target.event.id,
           clubId: targetClub.id,
           participantName: participant.participantName,
-          gender: targetClub.collectGender ? participant.gender : null,
-          ageGroup: targetClub.collectAge ? participant.ageGroup : null,
+          gender: participant.gender,
+          ageGroup: participant.ageGroup,
         });
       }
       return Response.json({

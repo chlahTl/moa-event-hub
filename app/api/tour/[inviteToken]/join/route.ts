@@ -1,5 +1,6 @@
 import { ensureDatabase, getDb } from "../../../../../db";
 import { participants } from "../../../../../db/schema";
+import { eq } from "drizzle-orm";
 import {
   createDeviceToken,
   hashDeviceToken,
@@ -32,28 +33,30 @@ export async function POST(
     }
     const gender = stringField(body, "gender");
     const ageGroup = stringField(body, "ageGroup");
-    if (gender && !GENDERS.has(gender)) {
-      return Response.json({ error: "성별 입력을 확인해 주세요." }, { status: 400 });
+    if (!GENDERS.has(gender)) {
+      return Response.json({ error: "성별을 선택해 주세요." }, { status: 400 });
     }
-    if (ageGroup && !AGE_GROUPS.has(ageGroup)) {
-      return Response.json({ error: "연령 구분 입력을 확인해 주세요." }, { status: 400 });
+    if (!AGE_GROUPS.has(ageGroup)) {
+      return Response.json({ error: "연령 구분을 선택해 주세요." }, { status: 400 });
     }
 
     const deviceToken = readDeviceToken(request) || createDeviceToken();
     const deviceTokenHash = await hashDeviceToken(deviceToken);
     let participant = await findParticipant(event.id, deviceTokenHash);
+    const db = getDb();
     if (!participant) {
-      const db = getDb();
       await db.insert(participants).values({
         id: crypto.randomUUID(),
         eventId: event.id,
         deviceTokenHash,
         participantName,
-        gender: gender || null,
-        ageGroup: ageGroup || null,
+        gender,
+        ageGroup,
       }).onConflictDoNothing();
-      participant = await findParticipant(event.id, deviceTokenHash);
+    } else {
+      await db.update(participants).set({ participantName, gender, ageGroup }).where(eq(participants.id, participant.id));
     }
+    participant = await findParticipant(event.id, deviceTokenHash);
     if (!participant) throw new Error("참가자 등록 결과를 확인하지 못했습니다.");
 
     return Response.json(await buildTourPayload(event, participant, "행사 참가 등록이 완료됐어요."), {

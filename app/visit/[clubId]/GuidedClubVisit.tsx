@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AGE_GROUP_OPTIONS } from "../../../lib/tour";
 
 type ClubInfo = {
@@ -66,12 +66,9 @@ export default function VisitForm({ clubId }: { clubId: string }) {
       });
   }, [clubId]);
 
-  const fields = useMemo(() => 1 + [club?.collectGender, club?.collectAge].filter(Boolean).length, [club]);
-  const completed = useMemo(
-    () => [participantName.trim(), club?.collectGender ? gender : true, club?.collectAge ? ageGroup : true].filter(Boolean).length,
-    [club, participantName, gender, ageGroup],
-  );
-  const canSubmit = Boolean(participantName.trim() && club && (!club.collectGender || gender) && (!club.collectAge || ageGroup));
+  const fields = 3;
+  const completed = [participantName.trim(), gender, ageGroup].filter(Boolean).length;
+  const canSubmit = Boolean(participantName.trim() && club && gender && ageGroup);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -130,23 +127,19 @@ export default function VisitForm({ clubId }: { clubId: string }) {
             </label>
           </fieldset>
 
-          {club.collectGender && (
-            <fieldset>
-              <legend><span>02</span><div><strong>성별을 골라 주세요.</strong><small>한 가지만 선택할 수 있어요.</small></div></legend>
-              <div className="choice-grid gender-grid">
-                {GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" name="gender" value={item} checked={gender === item} onChange={() => setGender(item)} /><span className="choice-check">✓</span><strong>{item}</strong></label>)}
-              </div>
-            </fieldset>
-          )}
+          <fieldset>
+            <legend><span>02</span><div><strong>성별을 골라 주세요.</strong><small>반드시 한 가지를 선택해야 합니다.</small></div></legend>
+            <div className="choice-grid gender-grid">
+              {GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" name="gender" value={item} checked={gender === item} onChange={() => setGender(item)} required /><span className="choice-check">✓</span><strong>{item}</strong></label>)}
+            </div>
+          </fieldset>
 
-          {club.collectAge && (
-            <fieldset>
-              <legend><span>{club.collectGender ? "03" : "02"}</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>내 나이가 들어가는 범위를 선택해요.</small></div></legend>
-              <div className="choice-grid age-grid">
-                {AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" name="ageGroup" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}
-              </div>
-            </fieldset>
-          )}
+          <fieldset>
+            <legend><span>03</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>반드시 한 가지를 선택해야 합니다.</small></div></legend>
+            <div className="choice-grid age-grid">
+              {AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" name="ageGroup" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} required /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}
+            </div>
+          </fieldset>
 
           {error && <p className="visit-error">{error}</p>}
           <button className="visit-submit" type="submit" disabled={!canSubmit || status === "submitting"}>

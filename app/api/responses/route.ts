@@ -32,10 +32,10 @@ export async function POST(request: Request) {
 
     const gender = stringField(body, "gender");
     const ageGroup = stringField(body, "ageGroup");
-    if (club.collectGender && !GENDERS.has(gender)) {
+    if (!GENDERS.has(gender)) {
       return Response.json({ error: "성별을 선택해 주세요." }, { status: 400 });
     }
-    if (club.collectAge && !AGE_GROUPS.has(ageGroup)) {
+    if (!AGE_GROUPS.has(ageGroup)) {
       return Response.json({ error: "연령 구분을 선택해 주세요." }, { status: 400 });
     }
 
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
       eventId: club.eventId,
       clubId,
       participantName,
-      gender: club.collectGender ? gender : null,
-      ageGroup: club.collectAge ? ageGroup : null,
+      gender,
+      ageGroup,
     });
     return Response.json({ response: { id } }, { status: 201 });
   } catch {

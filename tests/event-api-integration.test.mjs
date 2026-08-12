@@ -208,11 +208,13 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
       stampEmoji: "🌱",
       stampMessage: "환경 동아리 스탬프 완료!",
       submissionGuide: "안내 데스크에 활동지를 제출해 주세요.",
-      collectGender: true,
-      collectAge: true,
+      collectGender: false,
+      collectAge: false,
     },
   })), 201);
   const club = createdClub.club;
+  assert.equal(club.collectGender, true);
+  assert.equal(club.collectAge, true);
 
   const publicClub = await json(await clubRoute.GET(
     request(`/api/clubs/${club.id}`),
@@ -220,6 +222,11 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   ), 200);
   assert.equal(publicClub.club.name, "-환경 동아리");
   assert.equal(publicClub.club.stampEmoji, "🌱");
+  const incompleteDirectResponse = await responsesRoute.POST(request("/api/responses", {
+    method: "POST",
+    body: { clubId: club.id, participantName: "미완료 참가자" },
+  }));
+  assert.equal(incompleteDirectResponse.status, 400);
 
   const directResponse = await json(await responsesRoute.POST(request("/api/responses", {
     method: "POST",
@@ -252,21 +259,30 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.equal(initialTour.progress.total, 1);
   assert.equal(initialTour.extraProgress.total, 1);
 
+  const incompleteJoinResponse = await tourJoinRoute.POST(
+    request(`/api/tour/${event.inviteToken}/join`, {
+      method: "POST",
+      body: { participantName: "미완료 참가자" },
+    }),
+    inviteContext(event.inviteToken),
+  );
+  assert.equal(incompleteJoinResponse.status, 400);
+
   const joinResponse = await tourJoinRoute.POST(
     request(`/api/tour/${event.inviteToken}/join`, {
       method: "POST",
       body: {
         participantName: "@김 모아",
-        gender: "",
-        ageGroup: "",
+        gender: "남성",
+        ageGroup: "일반",
       },
     }),
     inviteContext(event.inviteToken),
   );
   const joinedTour = await json(joinResponse, 201);
   assert.equal(joinedTour.participant.name, "@김 모아");
-  assert.equal(joinedTour.participant.gender, null);
-  assert.equal(joinedTour.participant.ageGroup, null);
+  assert.equal(joinedTour.participant.gender, "남성");
+  assert.equal(joinedTour.participant.ageGroup, "일반");
   const participantCookie = joinResponse.headers.get("set-cookie")?.split(";", 1)[0];
   assert.match(participantCookie ?? "", /^moa_participant_session=[A-Za-z0-9_-]+$/);
 
@@ -305,6 +321,13 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.equal(joinedTourAgain.progress.completed, 1);
   assert.equal(joinedTourAgain.extraProgress.completed, 1);
 
+  const incompleteManualRecord = await manualRecordsRoute.POST(request("/api/manual-records", {
+    method: "POST",
+    admin: true,
+    body: { eventId: event.id, participantName: "미완료 수기 참가자" },
+  }));
+  assert.equal(incompleteManualRecord.status, 400);
+
   const manualRecord = await json(await manualRecordsRoute.POST(request("/api/manual-records", {
     method: "POST",
     admin: true,
@@ -334,7 +357,7 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   }));
   const stats = await json(statsResponse, 200);
   assert.match(statsResponse.headers.get("cache-control") ?? "", /no-store/);
-  assert.deepEqual(stats.age, [{ label: "일반", total: 2 }]);
+  assert.deepEqual(stats.age, [{ label: "일반", total: 3 }]);
   assert.equal(stats.recent.length, 3);
   assert.equal(stats.recent[0].clubName, "-환경 동아리");
 
