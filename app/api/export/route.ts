@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { clubStampRecords, clubs, events, participants, responses } from "../../../db/schema";
+import { clubStampRecords, clubs, events, participants } from "../../../db/schema";
 import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
@@ -69,17 +69,18 @@ export async function GET(request: Request) {
         eventName: events.name,
         institution: events.institution,
         clubName: clubs.name,
-        participantName: responses.participantName,
-        gender: responses.gender,
-        ageGroup: responses.ageGroup,
-        createdAt: responses.createdAt,
+        participantName: participants.participantName,
+        gender: participants.gender,
+        ageGroup: participants.ageGroup,
+        createdAt: clubStampRecords.createdAt,
       })
-      .from(responses)
-      .innerJoin(events, eq(responses.eventId, events.id))
-      .innerJoin(clubs, eq(responses.clubId, clubs.id))
+      .from(clubStampRecords)
+      .innerJoin(events, eq(clubStampRecords.eventId, events.id))
+      .innerJoin(clubs, eq(clubStampRecords.clubId, clubs.id))
+      .innerJoin(participants, eq(clubStampRecords.participantId, participants.id))
       .where(clubId
-        ? and(eq(responses.eventId, eventId), eq(responses.clubId, clubId), isNull(events.deletedAt))
-        : and(eq(responses.eventId, eventId), isNull(events.deletedAt)));
+        ? and(eq(clubStampRecords.eventId, eventId), eq(clubStampRecords.clubId, clubId), isNull(events.deletedAt))
+        : and(eq(clubStampRecords.eventId, eventId), isNull(events.deletedAt)));
 
     if (clubId && !rows.length) {
       const club = await db

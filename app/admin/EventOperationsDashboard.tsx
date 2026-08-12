@@ -70,7 +70,8 @@ type ShareQr = {
 
 type StatItem = { label: string; total: number };
 type RecentItem = { id: string; clubName: string; participantName: string; gender: string | null; ageGroup: string | null; createdAt: string };
-type Stats = { gender: StatItem[]; age: StatItem[]; recent: RecentItem[] };
+type EngagementStats = { averageClubs: number; totalClubVisits: number; depth: StatItem[] };
+type Stats = { gender: StatItem[]; age: StatItem[]; recent: RecentItem[]; engagement: EngagementStats };
 type ManualRecord = {
   id: string;
   participantName: string;
@@ -113,7 +114,7 @@ type AdminDashboardProps = {
   signOutHref?: string | null;
 };
 
-const EMPTY_STATS: Stats = { gender: [], age: [], recent: [] };
+const EMPTY_STATS: Stats = { gender: [], age: [], recent: [], engagement: { averageClubs: 0, totalClubVisits: 0, depth: [] } };
 const SELECTED_EVENT_STORAGE_KEY = "moa.admin.selectedEventId";
 
 export default function AdminDashboard({ adminName, adminEmail, signOutHref }: AdminDashboardProps = {}) {
@@ -826,6 +827,11 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 </section>
               </div>
 
+              <section className="panel engagement-panel">
+                <div className="panel-heading"><div><p>참여 깊이</p><h2>참가자당 동아리 참여</h2></div><span>중복 제외</span></div>
+                <EngagementSummary stats={stats.engagement} participantTotal={selected.participantCount} />
+              </section>
+
               <section className="panel response-panel">
                 <div className="panel-heading"><div><p>최근 활동</p><h2>최근 응답</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
                 <RecentTable items={stats.recent} />
@@ -854,7 +860,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       {modal === "editClub" && selected && editingClub && <ClubModal busy={busyAction === `update-club:${editingClub.id}`} eventName={selected.name} club={editingClub} onClose={() => { if (!busyAction) { setModal(null); setEditingClub(null); } }} onSubmit={updateClub} />}
       {modal === "stampPoint" && selected && <StampPointModal busy={busyAction === "create-stamp-point"} eventName={selected.name} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={createStampPoint} />}
       {modal === "qr" && shareQr && <QrModal qr={shareQr} data={qrData} busy={qrBusy} onClose={() => setModal(null)} onNotify={notify} />}
-      {modal === "participants" && selected && <ParticipantListModal event={selected} club={participantClub} onClose={() => { setModal(null); setParticipantClub(null); }} />}
+      {modal === "participants" && selected && <ParticipantListModal event={selected} club={participantClub} onChanged={() => setStatsReloadToken((current) => current + 1)} onClose={() => { setModal(null); setParticipantClub(null); }} />}
       {deletionAction && (
         <EventDeletionModal
           action={deletionAction}
@@ -906,6 +912,18 @@ function GenderChart({ items, total }: { items: StatItem[]; total: number }) {
 
 function ChartEmpty() {
   return <div className="chart-empty"><span>⌁</span><strong>아직 참가자가 없습니다.</strong><p>참가 등록이 완료되면 여기에 바로 표시됩니다.</p></div>;
+}
+
+function EngagementSummary({ stats, participantTotal }: { stats: EngagementStats; participantTotal: number }) {
+  const max = Math.max(...stats.depth.map((item) => item.total), 1);
+  return (
+    <div className="engagement-summary">
+      <div className="engagement-average"><strong>{stats.averageClubs.toFixed(1)}</strong><span>개</span><p>참가자 1명당 평균 참여 동아리</p><small>전체 {stats.totalClubVisits.toLocaleString()}건 · 참가자 {participantTotal.toLocaleString()}명</small></div>
+      <div className="depth-chart" aria-label="참여 동아리 수별 참가자 분포">
+        {stats.depth.map((item) => <div className="depth-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${(item.total / max) * 100}%` }} /></div><strong>{item.total}명</strong></div>)}
+      </div>
+    </div>
+  );
 }
 
 function RecentTable({ items }: { items: RecentItem[] }) {
@@ -961,11 +979,13 @@ function ModalShell({ title, kicker, closeDisabled = false, onClose, children }:
   return <div className="modal-backdrop" role="presentation"><dialog ref={dialogRef} className="modal" open aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}><button className="modal-close" disabled={closeDisabled} onClick={onClose} aria-label="닫기">×</button><p className="modal-kicker">{kicker}</p><h2 id={titleId}>{title}</h2>{children}</dialog></div>;
 }
 
-function ParticipantListModal({ event, club, onClose }: { event: EventItem; club: Club | null; onClose: () => void }) {
+function ParticipantListModal({ event, club, onChanged, onClose }: { event: EventItem; club: Club | null; onChanged: () => void; onClose: () => void }) {
   const [records, setRecords] = useState<ParticipantListRecord[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState<ParticipantListRecord | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -997,19 +1017,59 @@ function ParticipantListModal({ event, club, onClose }: { event: EventItem; club
       ].some((value) => value?.toLocaleLowerCase("ko-KR").includes(normalizedQuery)))
     : records;
 
+  async function saveParticipant(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
+    if (!editing || saving) return;
+    setSaving(true);
+    setError("");
+    const form = new FormData(formEvent.currentTarget);
+    try {
+      const response = await fetch(`/api/participants/${encodeURIComponent(editing.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantName: form.get("participantName"),
+          gender: form.get("gender"),
+          ageGroup: form.get("ageGroup"),
+          contactInfo: form.get("contactInfo"),
+          affiliation: form.get("affiliation"),
+        }),
+      });
+      const data = await readApiResponse<{ participant: ParticipantListRecord }>(response, "참가자 정보를 수정하지 못했습니다.");
+      setRecords((current) => current.map((record) => record.id === editing.id ? { ...record, ...data.participant } : record));
+      setEditing(null);
+      onChanged();
+    } catch (caught) {
+      setError(friendlyError(caught, "참가자 정보를 수정하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <ModalShell title={club ? `${club.name} · ${records.length}명` : `전체 참가자 · ${records.length}명`} kicker={club ? "동아리 참가자" : "행사 참가자"} onClose={onClose}>
+    <ModalShell title={club ? `${club.name} · ${records.length}명` : `전체 참가자 · ${records.length}명`} kicker={club ? "동아리 참가자" : "행사 참가자"} closeDisabled={saving} onClose={onClose}>
       <p className="modal-intro">{club ? "이 동아리에 참여한 명단입니다." : `${event.name}에 참가 등록한 전체 명단입니다.`}</p>
       <label className="participant-search">참가자 검색<input autoFocus type="search" value={query} onChange={(change) => setQuery(change.target.value)} placeholder="이름, 성별, 연령, 소속 또는 동아리" /></label>
       <div className="participant-list-summary"><strong>{visibleRecords.length}명</strong><span>{query ? `전체 ${records.length}명 중 검색 결과` : "현재 명단"}</span><a href={club ? `/api/export?eventId=${event.id}&clubId=${club.id}` : `/api/export?eventId=${event.id}&scope=participants`}>CSV 내려받기 ↓</a></div>
-      {loading ? <div className="participant-list-state">명단을 불러오는 중입니다.</div> : error ? <div className="participant-list-state error" role="alert">{error}</div> : visibleRecords.length ? (
+      {error && <div className="participant-inline-error" role="alert">{error}</div>}
+      {loading ? <div className="participant-list-state">명단을 불러오는 중입니다.</div> : visibleRecords.length ? (
         <div className="participant-list" role="list">
           {visibleRecords.map((record) => (
-            <article key={record.id} role="listitem">
-              <div><strong>{record.participantName}</strong><span>{record.gender || "—"} · {record.ageGroup || "—"}</span></div>
-              {!club && <p>{record.clubs?.length ? record.clubs.map((item) => item.name).join(", ") : "아직 동아리 참여 없음"}</p>}
-              {club && <time>{formatDateTime(record.createdAt)}</time>}
-            </article>
+            editing?.id === record.id ? (
+              <form className="participant-edit-form" key={record.id} onSubmit={saveParticipant}>
+                <label>이름<input name="participantName" defaultValue={record.participantName} required maxLength={30} autoFocus /></label>
+                <div className="form-row"><label>성별<select name="gender" defaultValue={record.gender || ""} required><option value="" disabled>선택해 주세요</option><option value="여성">여성</option><option value="남성">남성</option></select></label><label>연령 구분<select name="ageGroup" defaultValue={record.ageGroup || ""} required><option value="" disabled>선택해 주세요</option>{AGE_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.value} ({option.detail})</option>)}</select></label></div>
+                <div className="form-row"><label>학번·연락처<input name="contactInfo" defaultValue={record.contactInfo || ""} maxLength={100} /></label><label>소속<input name="affiliation" defaultValue={record.affiliation || ""} maxLength={100} /></label></div>
+                <div className="participant-edit-actions"><button type="button" disabled={saving} onClick={() => setEditing(null)}>취소</button><button type="submit" disabled={saving}>{saving ? "저장 중…" : "수정 저장"}</button></div>
+              </form>
+            ) : (
+              <article key={record.id} role="listitem">
+                <div><strong>{record.participantName}</strong><span>{record.gender || "—"} · {record.ageGroup || "—"}{record.affiliation ? ` · ${record.affiliation}` : ""}</span></div>
+                {!club && <p>{record.clubs?.length ? record.clubs.map((item) => item.name).join(", ") : "아직 동아리 참여 없음"}</p>}
+                {club && <time>{formatDateTime(record.createdAt)}</time>}
+                <button className="participant-edit-button" type="button" disabled={saving} onClick={() => { setError(""); setEditing(record); }}>정보 수정</button>
+              </article>
+            )
           ))}
         </div>
       ) : <div className="participant-list-state">{query ? "검색 결과가 없습니다." : "아직 등록된 참가자가 없습니다."}</div>}

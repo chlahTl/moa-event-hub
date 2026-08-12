@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { clubStampRecords, clubs, events, participants, responses } from "../../../db/schema";
+import { clubStampRecords, clubs, events, participants } from "../../../db/schema";
 import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
@@ -32,15 +32,18 @@ export async function GET(request: Request) {
         .where(and(eq(clubs.id, clubId), eq(clubs.eventId, eventId))).limit(1);
       if (!club) return apiError("이 행사에 속한 동아리를 찾을 수 없습니다.", 404);
       const records = await db.select({
-        id: responses.id,
-        participantName: responses.participantName,
-        gender: responses.gender,
-        ageGroup: responses.ageGroup,
-        createdAt: responses.createdAt,
-      }).from(responses).where(and(
-        eq(responses.eventId, eventId),
-        eq(responses.clubId, clubId),
-      )).orderBy(desc(responses.createdAt));
+        id: participants.id,
+        participantName: participants.participantName,
+        gender: participants.gender,
+        ageGroup: participants.ageGroup,
+        contactInfo: participants.contactInfo,
+        affiliation: participants.affiliation,
+        recordSource: participants.recordSource,
+        createdAt: clubStampRecords.createdAt,
+      }).from(clubStampRecords)
+        .innerJoin(participants, eq(clubStampRecords.participantId, participants.id))
+        .where(and(eq(clubStampRecords.eventId, eventId), eq(clubStampRecords.clubId, clubId)))
+        .orderBy(desc(clubStampRecords.createdAt));
       return Response.json({ scope: "club", club, records }, { headers: PRIVATE_NO_STORE });
     }
 

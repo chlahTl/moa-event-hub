@@ -190,6 +190,8 @@ test("keeps every management API authenticated and owner-scoped", async () => {
     ["../app/api/stamp-points/route.ts", 2],
     ["../app/api/export/route.ts", 1],
     ["../app/api/stats/route.ts", 1],
+    ["../app/api/participants/route.ts", 1],
+    ["../app/api/participants/[participantId]/route.ts", 1],
   ]);
 
   for (const [relativePath, expectedChecks] of protectedRoutes) {

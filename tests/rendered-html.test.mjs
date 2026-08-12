@@ -130,13 +130,17 @@ test("club operations support custom guidance, safe offline retry, editing and e
   assert.match(clubDetailRoute, /export async function DELETE/);
   assert.match(claimRoute, /targetClub\.stampMessage/);
   assert.match(exportRoute, /searchParams\.get\("clubId"\)/);
-  assert.match(exportRoute, /eq\(responses\.clubId, clubId\)/);
+  assert.match(exportRoute, /eq\(clubStampRecords\.clubId, clubId\)/);
+  assert.match(exportRoute, /participants\.participantName/);
   assert.match(dashboard, /다음 행동 안내/);
   assert.match(dashboard, /실적 CSV/);
   assert.match(dashboard, /전체 명단 보기/);
   assert.match(dashboard, /참가자 명단 →/);
   assert.match(dashboard, /\/api\/participants\?/);
   assert.match(dashboard, /scope=participants/);
+  assert.match(dashboard, /참가자당 동아리 참여/);
+  assert.match(dashboard, /정보 수정/);
+  assert.match(dashboard, /method: "PATCH"/);
   assert.match(dashboard, /\/admin\/paper\/\$\{selected\.id\}\?clubId=\$\{club\.id\}/);
   assert.match(dashboard, /window\.confirm/);
   assert.match(scanner, /moa-pending-stamps/);

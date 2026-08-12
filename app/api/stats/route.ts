@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { clubs, events, participants, responses } from "../../../db/schema";
+import { clubStampRecords, clubs, events, participants } from "../../../db/schema";
 import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const [event] = await db.select({ id: events.id }).from(events)
       .where(and(eq(events.id, eventId), eq(events.ownerUserId, authorization.user.id), isNull(events.deletedAt))).limit(1);
     if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
-    const [gender, age, recent] = await Promise.all([
+    const [gender, age, recent, visitCounts] = await Promise.all([
       db
         .select({ label: participants.gender, total: count() })
         .from(participants)
@@ -29,23 +29,42 @@ export async function GET(request: Request) {
         .groupBy(participants.ageGroup),
       db
         .select({
-          id: responses.id,
+          id: clubStampRecords.id,
           clubName: clubs.name,
-          participantName: responses.participantName,
-          gender: responses.gender,
-          ageGroup: responses.ageGroup,
-          createdAt: responses.createdAt,
+          participantName: participants.participantName,
+          gender: participants.gender,
+          ageGroup: participants.ageGroup,
+          createdAt: clubStampRecords.createdAt,
         })
-        .from(responses)
-        .innerJoin(clubs, eq(responses.clubId, clubs.id))
-        .where(eq(responses.eventId, eventId))
-        .orderBy(desc(responses.createdAt))
+        .from(clubStampRecords)
+        .innerJoin(clubs, eq(clubStampRecords.clubId, clubs.id))
+        .innerJoin(participants, eq(clubStampRecords.participantId, participants.id))
+        .where(eq(clubStampRecords.eventId, eventId))
+        .orderBy(desc(clubStampRecords.createdAt))
         .limit(8),
+      db.select({ participantId: clubStampRecords.participantId, total: count() })
+        .from(clubStampRecords)
+        .where(eq(clubStampRecords.eventId, eventId))
+        .groupBy(clubStampRecords.participantId),
     ]);
+    const participantTotal = gender.reduce((sum, item) => sum + Number(item.total), 0);
+    const visitsByParticipant = new Map(visitCounts.map((item) => [item.participantId, Number(item.total)]));
+    const depth = [
+      { label: "0개", total: Math.max(participantTotal - visitsByParticipant.size, 0) },
+      { label: "1개", total: visitCounts.filter((item) => Number(item.total) === 1).length },
+      { label: "2~3개", total: visitCounts.filter((item) => Number(item.total) >= 2 && Number(item.total) <= 3).length },
+      { label: "4개 이상", total: visitCounts.filter((item) => Number(item.total) >= 4).length },
+    ];
+    const totalClubVisits = visitCounts.reduce((sum, item) => sum + Number(item.total), 0);
     return Response.json({
       gender: gender.filter((item) => item.label).map((item) => ({ ...item, total: Number(item.total) })),
       age: age.filter((item) => item.label).map((item) => ({ ...item, total: Number(item.total) })),
       recent,
+      engagement: {
+        averageClubs: participantTotal ? Math.round((totalClubVisits / participantTotal) * 10) / 10 : 0,
+        totalClubVisits,
+        depth,
+      },
     }, { headers: { "Cache-Control": "no-store, private" } });
   } catch {
     return internalApiError("통계를 불러오지 못했습니다.");

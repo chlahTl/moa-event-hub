@@ -31,6 +31,7 @@ const [
   exportRoute,
   manualRecordsRoute,
   participantsRoute,
+  participantRoute,
   adminAuth,
   databaseModule,
 ] = await Promise.all([
@@ -50,6 +51,7 @@ const [
   import("../app/api/export/route.ts"),
   import("../app/api/manual-records/route.ts"),
   import("../app/api/participants/route.ts"),
+  import("../app/api/participants/[participantId]/route.ts"),
   import("../app/auth.ts"),
   import("../db/index.ts"),
 ]);
@@ -102,6 +104,10 @@ function clubContext(clubId) {
 
 function inviteContext(inviteToken) {
   return { params: Promise.resolve({ inviteToken }) };
+}
+
+function participantContext(participantId) {
+  return { params: Promise.resolve({ participantId }) };
 }
 
 async function json(response, expectedStatus) {
@@ -372,6 +378,16 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.deepEqual(stats.age, [{ label: "일반", total: 3 }]);
   assert.equal(stats.recent.length, 3);
   assert.equal(stats.recent[0].clubName, "-환경 동아리");
+  assert.deepEqual(stats.engagement, {
+    averageClubs: 1,
+    totalClubVisits: 3,
+    depth: [
+      { label: "0개", total: 0 },
+      { label: "1개", total: 3 },
+      { label: "2~3개", total: 0 },
+      { label: "4개 이상", total: 0 },
+    ],
+  });
 
   const unauthenticatedParticipants = await participantsRoute.GET(request(`/api/participants?eventId=${event.id}`));
   assert.equal(unauthenticatedParticipants.status, 401);
@@ -403,6 +419,34 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.match(participantCsv, /"참여 동아리"/);
   assert.match(participantCsv, /"종이 참가자"/);
   assert.match(participantCsv, /"청년부"/);
+
+  const joinedParticipant = participantList.records.find((record) => record.participantName === "@김 모아");
+  const unauthorizedUpdate = await participantRoute.PATCH(request(`/api/participants/${joinedParticipant.id}`, {
+    method: "PATCH",
+    body: { participantName: "수정 이름", gender: "여성", ageGroup: "청년" },
+  }), participantContext(joinedParticipant.id));
+  assert.equal(unauthorizedUpdate.status, 401);
+  const crossAccountUpdate = await participantRoute.PATCH(request(`/api/participants/${joinedParticipant.id}`, {
+    method: "PATCH",
+    admin: true,
+    sessionToken: OTHER_SESSION,
+    body: { participantName: "수정 이름", gender: "여성", ageGroup: "청년" },
+  }), participantContext(joinedParticipant.id));
+  assert.equal(crossAccountUpdate.status, 404);
+  const updatedParticipant = await json(await participantRoute.PATCH(request(`/api/participants/${joinedParticipant.id}`, {
+    method: "PATCH",
+    admin: true,
+    body: {
+      participantName: "수정 참가자",
+      gender: "여성",
+      ageGroup: "청년",
+      contactInfo: "010-0000-0000",
+      affiliation: "운영팀",
+    },
+  }), participantContext(joinedParticipant.id)), 200);
+  assert.equal(updatedParticipant.participant.participantName, "수정 참가자");
+  const updatedClubList = await json(await participantsRoute.GET(request(`/api/participants?eventId=${event.id}&clubId=${club.id}`, { admin: true })), 200);
+  assert.equal(updatedClubList.records.find((record) => record.id === joinedParticipant.id).participantName, "수정 참가자");
 
   const expectedImpact = {
     clubCount: 1,
