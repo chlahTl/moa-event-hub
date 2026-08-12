@@ -668,6 +668,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
           <a href="#events"><span>◇</span>행사 관리</a>
           {selected?.stampEnabled && <a href="#clubs"><span>⌗</span>부스·동아리</a>}
           {selected?.stampEnabled && <a href="#stamps"><span>＋</span>추가 지점</a>}
+          {selected && <a href="#results"><span>↗</span>행사 결과</a>}
           <a href="#field-mode"><span>◎</span>현장 모드</a>
         </nav>
         <div className="sidebar-help">
@@ -686,10 +687,21 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
           <div className="topbar-actions">
             {signOutHref && <a className="admin-signout" href={signOutHref}>로그아웃</a>}
             {selected && <button className="refresh-button" onClick={() => void refreshDashboard()}>↻ 현황 새로고침</button>}
-            <button className="button button-primary small" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사</button>
+            {selected ? <>
+              <button className="new-event-secondary" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사</button>
+              {selected.stampEnabled ? <a className="button button-primary small" href="#qr-prep">현장 QR 준비 →</a> : <button className="button button-primary small" onClick={() => setModal("editEvent")}>행사 운영 설정 →</button>}
+            </> : <button className="button button-primary small" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사 만들기</button>}
             <div className="avatar" aria-label={`${displayName} 관리자${adminEmail ? `, ${adminEmail}` : ""}`} title={adminEmail || displayName}>{avatarLabel}</div>
           </div>
         </header>
+
+        <nav className="mobile-section-nav" aria-label="현재 행사 빠른 이동">
+          <a href="#events">행사</a>
+          {selected && <a href="#selected-event-details">준비</a>}
+          {selected?.stampEnabled && <a href="#clubs">부스</a>}
+          {selected && <a href="#field-mode">현장</a>}
+          {selected && <a href="#results">결과</a>}
+        </nav>
 
         {error && <div className="error-banner" role="alert"><span>!</span>{error}<button className="error-retry" onClick={() => void retryEventLoad()}>목록 새로고침</button><button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
 
@@ -720,18 +732,16 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 </div>
                 <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span><button onClick={() => { setParticipantClub(null); setModal("participants"); }}>전체 명단 보기</button></div>
                 <div className="spotlight-actions">
+                  {selected.stampEnabled && <button className="primary-spotlight" disabled={qrBusy} onClick={() => openEventQr(selected)}>참가 등록 QR <span>⌗</span></button>}
                   <button disabled={Boolean(busyAction)} onClick={() => setModal("editEvent")}>행사 설정 <span>⚙</span></button>
                   <a className="secondary-spotlight" href={`/admin/paper/${selected.id}`}>종이 기록지 <span>▤</span></a>
                   <button className="secondary-spotlight" disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>종이 기록 등록 <span>＋</span></button>
-                  {selected.stampEnabled && <button disabled={qrBusy} onClick={() => openEventQr(selected)}>초대 QR <span>⌗</span></button>}
                 </div>
               </div>
 
               <div className="event-summary-grid" aria-label={`${selected.name} 운영 요약`}>
-                <EventFact label="상태" value={selectedStatus} note="대한민국 날짜 기준" symbol="◇" />
                 <EventFact label="기간" value={selectedRange ? formatCompactPeriod(selectedRange.startDate, selectedRange.endDate) : "—"} note="시작일 – 종료일" symbol="◷" />
                 <EventFact label="장소" value={selected.location || "장소 미정"} note={selected.institution} symbol="⌖" />
-                <EventFact label="참가자" value={`${selected.participantCount.toLocaleString()}명`} note="행사 등록 기준" symbol="↗" />
                 <EventFact label="스탬프 행사" value={selected.stampEnabled ? "사용" : "사용 안 함"} note="행사 설정에서 변경" symbol="◫" />
                 <EventFact label="최근 활동" value={formatSummaryActivity(selected.updatedAt || selected.createdAt)} note={selected.updatedAt ? "최근 변경" : "행사 생성"} symbol="↻" />
               </div>
@@ -816,6 +826,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 )}
               </section>
 
+              <section className="results-section" id="results" aria-labelledby="results-title">
+                <div className="section-divider-heading"><div><p>행사 결과</p><h2 id="results-title">참여 현황과 결과</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
               <div className="analytics-grid">
                 <section className="panel" id="responses">
                   <div className="panel-heading"><div><p>참가자 분포</p><h2>연령 구분</h2></div><span>행사 등록 기준</span></div>
@@ -835,6 +847,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
               <section className="panel response-panel">
                 <div className="panel-heading"><div><p>최근 활동</p><h2>최근 응답</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
                 <RecentTable items={stats.recent} />
+              </section>
               </section>
               </>}
 

@@ -12,17 +12,17 @@ export default function Home() {
 
       <section className="hero-section">
         <div className="hero-copy">
-          <p className="eyebrow"><span /> EVENT PARTICIPATION SYSTEM</p>
+          <p className="eyebrow"><span /> 행사 운영을 한 흐름으로</p>
           <h1>행사 참여를<br /><em>한곳에</em></h1>
           <p className="hero-description">
-            행사 아래 여러 부스·동아리를 만들고, 각 참여처에 필요한 정보만 받으세요.
-            QR 입력부터 분류·집계·엑셀 내려받기까지 하나의 흐름으로 이어집니다.
+            행사 생성부터 부스 QR 준비, 현장 참여와 결과 확인까지 한곳에서 운영하세요.
+            참가자는 로그인 없이 QR만 스캔하면 바로 참여할 수 있습니다.
           </p>
           <div className="hero-actions">
             <a href="/signin?returnTo=%2Fadmin" target="_top" className="button button-primary">로그인하고 행사 만들기 <span>→</span></a>
             <a href="#flow" className="button button-ghost">작동 방식 보기</a>
           </div>
-          <p className="hero-auth-note">행사를 만들거나 관리하려면 운영자 로그인이 필요합니다. 참가자는 로그인 없이 QR로 참여합니다.</p>
+          <p className="hero-auth-note"><strong>운영자는 로그인 후 이용합니다.</strong> 참가자는 별도 로그인 없이 행사 QR로 참여합니다.</p>
           <div className="hero-proof">
             <div><strong>01</strong><span>행사 생성</span></div>
             <div><strong>02</strong><span>부스별 QR</span></div>
@@ -32,7 +32,7 @@ export default function Home() {
 
         <div className="hero-visual" aria-label="행사에서 여러 부스·동아리 참여로 연결되는 구조">
           <div className="event-card-preview">
-            <span className="preview-label">행사 관리</span>
+            <span className="preview-label">오늘의 행사</span>
             <h2>참여 현황</h2>
             <p>일정 · 장소 · 응답을 한곳에서</p>
             <div className="preview-metric"><span>참가자 응답</span><strong>자동 집계</strong></div>
@@ -49,8 +49,8 @@ export default function Home() {
 
       <section className="flow-section" id="flow">
         <div className="section-heading">
-          <p className="eyebrow"><span /> HOW IT WORKS</p>
-          <h2>수기 입력을<br />세 단계로 줄입니다.</h2>
+          <p className="eyebrow"><span /> 이용 방법</p>
+          <h2>준비부터 결과까지<br />세 단계면 됩니다.</h2>
         </div>
         <div className="flow-grid">
           <article><span>01</span><div className="flow-icon">＋</div><h3>행사를 등록합니다</h3><p>행사명, 기관명, 날짜와 장소를 한 번 입력해 운영 기준을 만듭니다.</p></article>

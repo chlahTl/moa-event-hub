@@ -19,8 +19,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         <a href="/" className="brand-lockup auth-brand" aria-label="모아 홈">
           <span className="brand-mark">ㅁ</span><span>모아</span>
         </a>
-        <p className="auth-kicker">ORGANIZER SIGN IN</p>
-        <h1>로그인하고<br />행사를 만드세요.</h1>
+        <p className="auth-kicker">운영자 로그인</p>
+        <h1>행사 운영을<br />시작하세요.</h1>
         <p className="auth-intro">행사 생성과 QR 준비, 참여 현황 확인은 운영자 로그인 후 이용할 수 있습니다. 로그인하면 바로 행사 관리 화면으로 이동합니다.</p>
         {error && <div className="auth-error" role="alert">{error}</div>}
         <div className="auth-provider-list">
