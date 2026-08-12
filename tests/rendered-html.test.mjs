@@ -133,6 +133,10 @@ test("club operations support custom guidance, safe offline retry, editing and e
   assert.match(exportRoute, /eq\(responses\.clubId, clubId\)/);
   assert.match(dashboard, /다음 행동 안내/);
   assert.match(dashboard, /실적 CSV/);
+  assert.match(dashboard, /전체 명단 보기/);
+  assert.match(dashboard, /참가자 명단 →/);
+  assert.match(dashboard, /\/api\/participants\?/);
+  assert.match(dashboard, /scope=participants/);
   assert.match(dashboard, /\/admin\/paper\/\$\{selected\.id\}\?clubId=\$\{club\.id\}/);
   assert.match(dashboard, /window\.confirm/);
   assert.match(scanner, /moa-pending-stamps/);

@@ -83,6 +83,18 @@ type ManualRecord = {
   stampPoints: string[];
 };
 
+type ParticipantListRecord = {
+  id: string;
+  participantName: string;
+  gender: string | null;
+  ageGroup: string | null;
+  contactInfo?: string;
+  affiliation?: string;
+  recordSource?: string;
+  createdAt: string;
+  clubs?: { id: string; name: string }[];
+};
+
 type DeletionImpact = {
   clubCount: number;
   participantCount: number;
@@ -113,8 +125,9 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   const [statsReloadToken, setStatsReloadToken] = useState(0);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<"event" | "editEvent" | "manualRecord" | "club" | "editClub" | "stampPoint" | "qr" | null>(null);
+  const [modal, setModal] = useState<"event" | "editEvent" | "manualRecord" | "club" | "editClub" | "stampPoint" | "qr" | "participants" | null>(null);
   const [editingClub, setEditingClub] = useState<Club | null>(null);
+  const [participantClub, setParticipantClub] = useState<Club | null>(null);
   const [shareQr, setShareQr] = useState<ShareQr | null>(null);
   const [qrData, setQrData] = useState("");
   const [toast, setToast] = useState("");
@@ -196,7 +209,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
         }
       });
     return () => controller.abort();
-  }, [eventView, selected?.id, selected?.responseCount, statsReloadToken]);
+  }, [eventView, selected?.id, selected?.participantCount, selected?.responseCount, statsReloadToken]);
 
   useEffect(() => {
     if (eventView !== "active" || !selected?.id) {
@@ -704,7 +717,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                   <div className="spotlight-status-line"><span className={`event-status-badge ${selectedInactive ? "inactive" : selectedLifecycle}`}>{selectedStatus}</span><p>{formatPeriod(selected)} · {selected.location || "장소 미정"} · {selected.institution}</p></div>
                   {selected.description && <p className="spotlight-description">{selected.description}</p>}
                 </div>
-                <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span></div>
+                <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span><button onClick={() => { setParticipantClub(null); setModal("participants"); }}>전체 명단 보기</button></div>
                 <div className="spotlight-actions">
                   <button disabled={Boolean(busyAction)} onClick={() => setModal("editEvent")}>행사 설정 <span>⚙</span></button>
                   <a className="secondary-spotlight" href={`/admin/paper/${selected.id}`}>종이 기록지 <span>▤</span></a>
@@ -756,14 +769,14 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                     {selected.clubs.map((club, index) => (
                       <article className="club-card" key={club.id}>
                         <div className="club-card-top"><span>{club.stampEmoji || String(index + 1).padStart(2, "0")}</span><button disabled={qrBusy} onClick={() => openClubQr(club)} aria-label={`${club.name} QR 보기`}>⌗</button></div>
-                        <h3>{club.name}</h3>
+                        <h3>{club.name} <small>· {club.responseCount}명</small></h3>
                         <p>{club.description || "부스·동아리 참여"}</p>
                         <div className="field-tags">
                           <span>이름</span>
                           <span>성별</span>
                           <span>연령 구분</span>
                         </div>
-                        <div className="club-card-footer"><strong>{club.responseCount}<small>명</small></strong><button disabled={qrBusy} onClick={() => openClubQr(club)}>부스 참여 QR →</button></div>
+                        <div className="club-card-footer"><button onClick={() => { setParticipantClub(club); setModal("participants"); }}>참가자 명단 →</button><button disabled={qrBusy} onClick={() => openClubQr(club)}>부스 참여 QR →</button></div>
                         <div className="club-manage-actions">
                           <button disabled={Boolean(busyAction)} onClick={() => openClubEdit(club)}>수정</button>
                           <a href={`/admin/paper/${selected.id}?clubId=${club.id}`}>종이 기록지</a>
@@ -804,12 +817,12 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
 
               <div className="analytics-grid">
                 <section className="panel" id="responses">
-                  <div className="panel-heading"><div><p>응답 분포</p><h2>연령 구분</h2></div><span>응답 기준</span></div>
-                  <AgeChart items={stats.age} total={selected.responseCount} />
+                  <div className="panel-heading"><div><p>참가자 분포</p><h2>연령 구분</h2></div><span>행사 등록 기준</span></div>
+                  <AgeChart items={stats.age} total={selected.participantCount} />
                 </section>
                 <section className="panel">
-                  <div className="panel-heading"><div><p>응답 분포</p><h2>성별</h2></div><span>응답 기준</span></div>
-                  <GenderChart items={stats.gender} total={selected.responseCount} />
+                  <div className="panel-heading"><div><p>참가자 분포</p><h2>성별</h2></div><span>행사 등록 기준</span></div>
+                  <GenderChart items={stats.gender} total={selected.participantCount} />
                 </section>
               </div>
 
@@ -841,6 +854,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       {modal === "editClub" && selected && editingClub && <ClubModal busy={busyAction === `update-club:${editingClub.id}`} eventName={selected.name} club={editingClub} onClose={() => { if (!busyAction) { setModal(null); setEditingClub(null); } }} onSubmit={updateClub} />}
       {modal === "stampPoint" && selected && <StampPointModal busy={busyAction === "create-stamp-point"} eventName={selected.name} onClose={() => { if (!busyAction) setModal(null); }} onSubmit={createStampPoint} />}
       {modal === "qr" && shareQr && <QrModal qr={shareQr} data={qrData} busy={qrBusy} onClose={() => setModal(null)} onNotify={notify} />}
+      {modal === "participants" && selected && <ParticipantListModal event={selected} club={participantClub} onClose={() => { setModal(null); setParticipantClub(null); }} />}
       {deletionAction && (
         <EventDeletionModal
           action={deletionAction}
@@ -876,7 +890,7 @@ function EventFact({ label, value, note, symbol }: { label: string; value: strin
 function AgeChart({ items, total }: { items: StatItem[]; total: number }) {
   const max = Math.max(...items.map((item) => item.total), 1);
   if (!items.length) return <ChartEmpty />;
-  return <div className="bar-chart">{items.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${(item.total / max) * 100}%` }} /></div><strong>{item.total}</strong></div>)}<small>전체 응답 {total}명 기준</small></div>;
+  return <div className="bar-chart">{items.map((item) => <div className="bar-row" key={item.label}><span>{item.label}</span><div><i style={{ width: `${(item.total / max) * 100}%` }} /></div><strong>{item.total}</strong></div>)}<small>전체 참가자 {total}명 기준</small></div>;
 }
 
 function GenderChart({ items, total }: { items: StatItem[]; total: number }) {
@@ -887,11 +901,11 @@ function GenderChart({ items, total }: { items: StatItem[]; total: number }) {
   const femalePct = Math.round((female / denominator) * 100);
   const malePct = Math.round((male / denominator) * 100);
   if (!items.length) return <ChartEmpty />;
-  return <div className="donut-wrap"><div className="donut" style={{ background: `conic-gradient(#f06d54 0 ${femalePct}%, #123d37 ${femalePct}% ${femalePct + malePct}%, #cbd8d3 ${femalePct + malePct}% 100%)` }}><div><strong>{total}</strong><span>응답</span></div></div><div className="donut-legend"><p><i className="coral" />여성 <strong>{female}</strong></p><p><i className="teal" />남성 <strong>{male}</strong></p>{other > 0 && <p><i className="gray" />기타 <strong>{other}</strong></p>}</div></div>;
+  return <div className="donut-wrap"><div className="donut" style={{ background: `conic-gradient(#f06d54 0 ${femalePct}%, #123d37 ${femalePct}% ${femalePct + malePct}%, #cbd8d3 ${femalePct + malePct}% 100%)` }}><div><strong>{total}</strong><span>참가자</span></div></div><div className="donut-legend"><p><i className="coral" />여성 <strong>{female}</strong></p><p><i className="teal" />남성 <strong>{male}</strong></p>{other > 0 && <p><i className="gray" />기타 <strong>{other}</strong></p>}</div></div>;
 }
 
 function ChartEmpty() {
-  return <div className="chart-empty"><span>⌁</span><strong>아직 응답이 없습니다.</strong><p>QR 입력이 들어오면 여기에 바로 표시됩니다.</p></div>;
+  return <div className="chart-empty"><span>⌁</span><strong>아직 참가자가 없습니다.</strong><p>참가 등록이 완료되면 여기에 바로 표시됩니다.</p></div>;
 }
 
 function RecentTable({ items }: { items: RecentItem[] }) {
@@ -945,6 +959,62 @@ function ModalShell({ title, kicker, closeDisabled = false, onClose, children }:
   }
 
   return <div className="modal-backdrop" role="presentation"><dialog ref={dialogRef} className="modal" open aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}><button className="modal-close" disabled={closeDisabled} onClick={onClose} aria-label="닫기">×</button><p className="modal-kicker">{kicker}</p><h2 id={titleId}>{title}</h2>{children}</dialog></div>;
+}
+
+function ParticipantListModal({ event, club, onClose }: { event: EventItem; club: Club | null; onClose: () => void }) {
+  const [records, setRecords] = useState<ParticipantListRecord[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams({ eventId: event.id });
+    if (club) params.set("clubId", club.id);
+    setLoading(true);
+    setError("");
+    fetch(`/api/participants?${params}`, { cache: "no-store", signal: controller.signal })
+      .then((response) => readApiResponse<{ records?: ParticipantListRecord[] }>(response, "참가자 명단을 불러오지 못했습니다."))
+      .then((data) => setRecords(data.records ?? []))
+      .catch((caught) => {
+        if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+          setError(friendlyError(caught, "참가자 명단을 불러오지 못했습니다."));
+        }
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [club, event.id]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("ko-KR");
+  const visibleRecords = normalizedQuery
+    ? records.filter((record) => [
+        record.participantName,
+        record.gender,
+        record.ageGroup,
+        record.contactInfo,
+        record.affiliation,
+        ...(record.clubs?.map((item) => item.name) ?? []),
+      ].some((value) => value?.toLocaleLowerCase("ko-KR").includes(normalizedQuery)))
+    : records;
+
+  return (
+    <ModalShell title={club ? `${club.name} · ${records.length}명` : `전체 참가자 · ${records.length}명`} kicker={club ? "동아리 참가자" : "행사 참가자"} onClose={onClose}>
+      <p className="modal-intro">{club ? "이 동아리에 참여한 명단입니다." : `${event.name}에 참가 등록한 전체 명단입니다.`}</p>
+      <label className="participant-search">참가자 검색<input autoFocus type="search" value={query} onChange={(change) => setQuery(change.target.value)} placeholder="이름, 성별, 연령, 소속 또는 동아리" /></label>
+      <div className="participant-list-summary"><strong>{visibleRecords.length}명</strong><span>{query ? `전체 ${records.length}명 중 검색 결과` : "현재 명단"}</span><a href={club ? `/api/export?eventId=${event.id}&clubId=${club.id}` : `/api/export?eventId=${event.id}&scope=participants`}>CSV 내려받기 ↓</a></div>
+      {loading ? <div className="participant-list-state">명단을 불러오는 중입니다.</div> : error ? <div className="participant-list-state error" role="alert">{error}</div> : visibleRecords.length ? (
+        <div className="participant-list" role="list">
+          {visibleRecords.map((record) => (
+            <article key={record.id} role="listitem">
+              <div><strong>{record.participantName}</strong><span>{record.gender || "—"} · {record.ageGroup || "—"}</span></div>
+              {!club && <p>{record.clubs?.length ? record.clubs.map((item) => item.name).join(", ") : "아직 동아리 참여 없음"}</p>}
+              {club && <time>{formatDateTime(record.createdAt)}</time>}
+            </article>
+          ))}
+        </div>
+      ) : <div className="participant-list-state">{query ? "검색 결과가 없습니다." : "아직 등록된 참가자가 없습니다."}</div>}
+    </ModalShell>
+  );
 }
 
 function EventModal({ event, busy, onClose, onSubmit }: { event?: EventItem; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

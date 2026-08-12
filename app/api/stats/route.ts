@@ -1,6 +1,6 @@
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { clubs, events, responses } from "../../../db/schema";
+import { clubs, events, participants, responses } from "../../../db/schema";
 import { authorizeAdminRequest } from "../../auth";
 import { apiError, internalApiError, isUuid } from "../../../lib/api-response";
 
@@ -18,15 +18,15 @@ export async function GET(request: Request) {
     if (!event) return apiError("행사를 찾을 수 없습니다.", 404);
     const [gender, age, recent] = await Promise.all([
       db
-        .select({ label: responses.gender, total: count() })
-        .from(responses)
-        .where(eq(responses.eventId, eventId))
-        .groupBy(responses.gender),
+        .select({ label: participants.gender, total: count() })
+        .from(participants)
+        .where(eq(participants.eventId, eventId))
+        .groupBy(participants.gender),
       db
-        .select({ label: responses.ageGroup, total: count() })
-        .from(responses)
-        .where(eq(responses.eventId, eventId))
-        .groupBy(responses.ageGroup),
+        .select({ label: participants.ageGroup, total: count() })
+        .from(participants)
+        .where(eq(participants.eventId, eventId))
+        .groupBy(participants.ageGroup),
       db
         .select({
           id: responses.id,

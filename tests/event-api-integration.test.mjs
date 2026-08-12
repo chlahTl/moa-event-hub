@@ -30,6 +30,7 @@ const [
   statsRoute,
   exportRoute,
   manualRecordsRoute,
+  participantsRoute,
   adminAuth,
   databaseModule,
 ] = await Promise.all([
@@ -48,6 +49,7 @@ const [
   import("../app/api/stats/route.ts"),
   import("../app/api/export/route.ts"),
   import("../app/api/manual-records/route.ts"),
+  import("../app/api/participants/route.ts"),
   import("../app/auth.ts"),
   import("../db/index.ts"),
 ]);
@@ -228,16 +230,26 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   }));
   assert.equal(incompleteDirectResponse.status, 400);
 
-  const directResponse = await json(await responsesRoute.POST(request("/api/responses", {
+  const directRequestBody = {
+    clubId: club.id,
+    participantName: "일반 참가자",
+    gender: "여성",
+    ageGroup: "일반",
+  };
+  const directResponseResult = await responsesRoute.POST(request("/api/responses", {
     method: "POST",
-    body: {
-      clubId: club.id,
-      participantName: "일반 참가자",
-      gender: "여성",
-      ageGroup: "일반",
-    },
-  })), 201);
+    body: directRequestBody,
+  }));
+  const directResponse = await json(directResponseResult, 201);
   assert.ok(directResponse.response.id);
+  const directParticipantCookie = directResponseResult.headers.get("set-cookie")?.split(";", 1)[0];
+  assert.ok(directParticipantCookie);
+  const duplicateDirectResponse = await json(await responsesRoute.POST(request("/api/responses", {
+    method: "POST",
+    headers: { cookie: directParticipantCookie },
+    body: directRequestBody,
+  })), 200);
+  assert.equal(duplicateDirectResponse.duplicate, true);
 
   const createdPoint = await json(await stampPointsRoute.POST(request("/api/stamp-points", {
     method: "POST",
@@ -361,6 +373,16 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.equal(stats.recent.length, 3);
   assert.equal(stats.recent[0].clubName, "-환경 동아리");
 
+  const unauthenticatedParticipants = await participantsRoute.GET(request(`/api/participants?eventId=${event.id}`));
+  assert.equal(unauthenticatedParticipants.status, 401);
+  const participantList = await json(await participantsRoute.GET(request(`/api/participants?eventId=${event.id}`, { admin: true })), 200);
+  assert.equal(participantList.scope, "event");
+  assert.equal(participantList.records.length, 3);
+  assert.deepEqual(participantList.records.find((record) => record.participantName === "@김 모아").clubs, [{ id: club.id, name: "-환경 동아리" }]);
+  const clubParticipantList = await json(await participantsRoute.GET(request(`/api/participants?eventId=${event.id}&clubId=${club.id}`, { admin: true })), 200);
+  assert.equal(clubParticipantList.scope, "club");
+  assert.equal(clubParticipantList.records.length, 3);
+
   const unauthenticatedCsv = await exportRoute.GET(request(`/api/export?eventId=${event.id}`));
   assert.equal(unauthenticatedCsv.status, 401);
   const csvResponse = await exportRoute.GET(request(`/api/export?eventId=${event.id}`, {
@@ -375,14 +397,20 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   assert.match(csv, /"'-환경 동아리"/);
   assert.match(csv, /"'@김 모아"/);
   assert.match(csv, /"일반"/);
+  const participantCsvResponse = await exportRoute.GET(request(`/api/export?eventId=${event.id}&scope=participants`, { admin: true }));
+  assert.equal(participantCsvResponse.status, 200);
+  const participantCsv = await participantCsvResponse.text();
+  assert.match(participantCsv, /"참여 동아리"/);
+  assert.match(participantCsv, /"종이 참가자"/);
+  assert.match(participantCsv, /"청년부"/);
 
   const expectedImpact = {
     clubCount: 1,
-    participantCount: 2,
+    participantCount: 3,
     responseCount: 3,
     stampPointCount: 1,
     stampRecordCount: 2,
-    clubStampRecordCount: 2,
+    clubStampRecordCount: 3,
   };
   const impact = await json(await deletionImpactRoute.GET(
     request(`/api/events/${event.id}/deletion-impact`, { admin: true }),
@@ -461,7 +489,7 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   );
   assert.equal(wrongConfirmation.status, 400);
   assert.equal(eventRowCount("events", event.id), 1);
-  assert.equal(eventRowCount("participants", event.id), 2);
+  assert.equal(eventRowCount("participants", event.id), 3);
 
   const permanentDelete = await json(await permanentRoute.DELETE(
     request(`/api/events/${event.id}/permanent`, {
