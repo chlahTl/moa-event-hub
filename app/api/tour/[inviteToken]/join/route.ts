@@ -32,11 +32,11 @@ export async function POST(
     }
     const gender = stringField(body, "gender");
     const ageGroup = stringField(body, "ageGroup");
-    if (!GENDERS.has(gender)) {
-      return Response.json({ error: "성별을 선택해 주세요." }, { status: 400 });
+    if (gender && !GENDERS.has(gender)) {
+      return Response.json({ error: "성별 입력을 확인해 주세요." }, { status: 400 });
     }
-    if (!AGE_GROUPS.has(ageGroup)) {
-      return Response.json({ error: "연령 구분을 선택해 주세요." }, { status: 400 });
+    if (ageGroup && !AGE_GROUPS.has(ageGroup)) {
+      return Response.json({ error: "연령 구분 입력을 확인해 주세요." }, { status: 400 });
     }
 
     const deviceToken = readDeviceToken(request) || createDeviceToken();
@@ -49,8 +49,8 @@ export async function POST(
         eventId: event.id,
         deviceTokenHash,
         participantName,
-        gender,
-        ageGroup,
+        gender: gender || null,
+        ageGroup: ageGroup || null,
       }).onConflictDoNothing();
       participant = await findParticipant(event.id, deviceTokenHash);
     }

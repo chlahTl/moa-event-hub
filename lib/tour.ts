@@ -1,4 +1,4 @@
-export const GENDERS = new Set(["여성", "남성", "응답하지 않음"]);
+export const GENDERS = new Set(["여성", "남성"]);
 export const AGE_GROUP_OPTIONS = [
   { value: "유아", detail: "8세 이하" },
   { value: "초등", detail: "9~13세" },

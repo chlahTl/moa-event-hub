@@ -13,10 +13,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const ogUrl = `${protocol}://${host}/og.png`;
   return {
     title: "모아 | 행사 참여를 한곳에",
-    description: "행사와 동아리별 참여 정보를 QR로 받고 자동으로 분류·집계합니다.",
+    description: "행사와 부스·동아리별 참여 정보를 QR로 받고 자동으로 분류·집계합니다.",
     openGraph: {
       title: "모아 | 행사 참여를 한곳에",
-      description: "행사 생성부터 동아리별 QR, 참여 통계와 엑셀 내려받기까지.",
+      description: "행사 생성부터 부스별 QR, 참여 통계와 엑셀 내려받기까지.",
       images: [{ url: ogUrl, width: 1200, height: 630, alt: "모아 행사 참여 관리" }],
     },
     twitter: { card: "summary_large_image", images: [ogUrl] },

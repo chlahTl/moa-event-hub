@@ -181,7 +181,7 @@ function LoadingVisit() {
 }
 
 function VisitError({ message }: { message: string }) {
-  return <main className="visit-shell visit-center"><div className="error-symbol">!</div><h1>QR을 다시 확인해 주세요.</h1><p>{message}</p></main>;
+  return <main className="visit-shell visit-center"><div className="error-symbol">!</div><h1>QR을 다시 확인해 주세요.</h1><p>{message}</p><div className="error-actions"><button onClick={() => window.location.reload()}>다시 시도</button><a href="/" target="_top">모아 안내로 돌아가기</a></div></main>;
 }
 
 function Success({ club, participantName }: { club: ClubInfo; participantName: string }) {

@@ -257,15 +257,16 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
       method: "POST",
       body: {
         participantName: "@김 모아",
-        gender: "응답하지 않음",
-        ageGroup: "일반",
+        gender: "",
+        ageGroup: "",
       },
     }),
     inviteContext(event.inviteToken),
   );
   const joinedTour = await json(joinResponse, 201);
   assert.equal(joinedTour.participant.name, "@김 모아");
-  assert.equal(joinedTour.participant.ageGroup, "일반");
+  assert.equal(joinedTour.participant.gender, null);
+  assert.equal(joinedTour.participant.ageGroup, null);
   const participantCookie = joinResponse.headers.get("set-cookie")?.split(";", 1)[0];
   assert.match(participantCookie ?? "", /^moa_participant_session=[A-Za-z0-9_-]+$/);
 
@@ -333,7 +334,7 @@ test("event APIs preserve public QR flows and safely complete the deletion lifec
   }));
   const stats = await json(statsResponse, 200);
   assert.match(statsResponse.headers.get("cache-control") ?? "", /no-store/);
-  assert.deepEqual(stats.age, [{ label: "일반", total: 3 }]);
+  assert.deepEqual(stats.age, [{ label: "일반", total: 2 }]);
   assert.equal(stats.recent.length, 3);
   assert.equal(stats.recent[0].clubName, "-환경 동아리");
 

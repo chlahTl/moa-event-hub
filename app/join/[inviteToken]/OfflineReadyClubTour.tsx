@@ -169,7 +169,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
       const url = new URL(text, window.location.origin);
       const clubMatch = url.pathname.match(/^\/visit\/([^/]+)\/?$/);
       const pointMatch = url.pathname.match(/^\/stamp\/([^/]+)\/?$/);
-      if (!clubMatch && !pointMatch) throw new Error("동아리 또는 추가 지점 QR이 아닙니다. 행사 QR을 스캔해 주세요.");
+      if (!clubMatch && !pointMatch) throw new Error("이 행사의 부스·동아리 또는 추가 지점 QR을 스캔해 주세요.");
       setScannerStatus("스탬프를 확인하고 있어요…");
       await claimStamp(clubMatch
         ? { clubId: decodeURIComponent(clubMatch[1]) }
@@ -224,7 +224,7 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
   }
 
   if (loading) return <TourCenter message="행사 참여 화면을 불러오고 있어요." />;
-  if (error && !tour) return <TourCenter error message={error} />;
+  if (error && !tour) return <TourCenter error message={error} onRetry={() => window.location.reload()} />;
   if (!tour) return null;
   if (!tour.participant) {
     return <JoinForm inviteToken={inviteToken} event={tour.event} onJoined={setTour} />;
@@ -241,9 +241,9 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
         <div>
           <p className="tour-kicker">STAMP TOUR · {tour.participant.name} 님</p>
           <h1>{tour.event.name}</h1>
-          <p>{tour.event.description || "동아리 QR을 스캔하며 참여 스탬프를 모아 보세요."}</p>
+          <p>{tour.event.description || "부스·동아리 QR을 스캔하며 참여 스탬프를 모아 보세요."}</p>
         </div>
-        <button className="scan-button" onClick={startScanner}><span>⌗</span> QR 스캔</button>
+        <button className="scan-button" onClick={startScanner}><span>⌗</span> 부스 QR 스캔</button>
       </section>
 
       {tour.successMessage && <div className="stamp-success" role="status"><span>✓</span>{tour.successMessage}</div>}
@@ -255,22 +255,22 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
         <div className="tour-progress-copy">
           <div><strong>{tour.progress.total}개 동아리 중 {tour.progress.completed}개 참여</strong><span>{tour.progress.percent}%</span></div>
           <div className="tour-progress-track"><i style={{ width: `${tour.progress.percent}%` }} /></div>
-          <p>{remaining.length ? `앞으로 ${remaining.length}개 동아리가 남았어요.` : tour.clubs.length ? "모든 동아리에 참여했어요!" : "이 행사에 등록된 동아리가 없습니다."}</p>
+          <p>{remaining.length ? `앞으로 ${remaining.length}개 부스·동아리가 남았어요.` : tour.clubs.length ? "모든 부스·동아리에 참여했어요!" : "이 행사에 등록된 부스·동아리가 없습니다."}</p>
         </div>
       </section>
 
       <section className="tour-points">
-        <div className="tour-section-heading"><div><p>CLUB STAMPS · PRIMARY</p><h2>동아리 참여 현황</h2></div><button onClick={startScanner}>동아리 QR 스캔</button></div>
+        <div className="tour-section-heading"><div><p>PARTICIPATION STAMPS</p><h2>부스·동아리 참여 현황</h2></div><button onClick={startScanner}>QR 스캔</button></div>
         {tour.clubs.length ? (
           <div className="tour-point-grid">
             {tour.clubs.map((club, index) => (
               <article className={club.visited ? "tour-point visited" : "tour-point"} key={`${club.name}-${index}`}>
                 <div className="stamp-medal">{club.visited ? club.stampEmoji || "⭐" : String(index + 1).padStart(2, "0")}</div>
-                <div><span>{club.visited ? "참여 완료" : "아직 참여 전"}</span><h3>{club.name}</h3><p>{club.visited && club.submissionGuide ? club.submissionGuide : club.description || "동아리 QR을 스캔해 참여해 주세요."}</p></div>
+                <div><span>{club.visited ? "참여 완료" : "아직 참여 전"}</span><h3>{club.name}</h3><p>{club.visited && club.submissionGuide ? club.submissionGuide : club.description || "현장의 참여 QR을 스캔해 주세요."}</p></div>
               </article>
             ))}
           </div>
-        ) : <div className="tour-empty">이 행사에 등록된 동아리가 없습니다.</div>}
+        ) : <div className="tour-empty">이 행사에 등록된 부스·동아리가 없습니다.</div>}
       </section>
 
       {tour.extraPoints.length > 0 && (
@@ -292,10 +292,11 @@ export default function EventTour({ inviteToken }: { inviteToken: string }) {
           <section className="scanner-panel">
             <button className="scanner-close" onClick={closeScanner} aria-label="스캐너 닫기">×</button>
             <p className="tour-kicker">POINT QR SCAN</p>
-            <h2>동아리 QR을 비춰 주세요.</h2>
+            <h2>부스·동아리 QR을 비춰 주세요.</h2>
             <div className="scanner-frame"><video ref={videoRef} muted playsInline /><i /><i /><i /><i /></div>
-            <p className={scannerStatus.includes("거부") || scannerStatus.includes("아닙니다") ? "scanner-message error" : "scanner-message"}>{claiming ? "스탬프를 등록하고 있어요…" : scannerStatus}</p>
-            <small>동아리 QR이 기본입니다. 추가 지점 QR도 같은 화면에서 인식할 수 있어요.</small>
+            <p className={scannerStatus.includes("거부") || scannerStatus.includes("이 행사의") ? "scanner-message error" : "scanner-message"}>{claiming ? "스탬프를 등록하고 있어요…" : scannerStatus}</p>
+            {(scannerStatus.includes("거부") || scannerStatus.includes("지원하지")) && <button className="scanner-retry" onClick={() => void startScanner()}>카메라 다시 시도</button>}
+            <small>부스·동아리 QR과 추가 지점 QR을 같은 화면에서 인식할 수 있어요.</small>
           </section>
         </div>
       )}
@@ -309,7 +310,7 @@ function JoinForm({ inviteToken, event, onJoined }: { inviteToken: string; event
   const [ageGroup, setAgeGroup] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const canSubmit = useMemo(() => Boolean(participantName.trim() && gender && ageGroup), [participantName, gender, ageGroup]);
+  const canSubmit = useMemo(() => Boolean(participantName.trim()), [participantName]);
 
   async function submit(eventForm: FormEvent) {
     eventForm.preventDefault();
@@ -343,18 +344,18 @@ function JoinForm({ inviteToken, event, onJoined }: { inviteToken: string; event
         <div className="privacy-note"><span>✓</span><p><strong>한 번만 입력하면 돼요.</strong><br />이후 지점 QR에서는 이름을 다시 묻지 않습니다.</p></div>
         <form className="visit-form" onSubmit={submit}>
           <fieldset><legend><span>01</span><div><strong>이름을 적어 주세요.</strong><small>행사 참가 확인에만 사용합니다.</small></div></legend><label className="visit-name-field"><span>내 이름</span><input value={participantName} onChange={(event) => setParticipantName(event.target.value)} maxLength={30} autoComplete="name" placeholder="예: 김모아" required autoFocus /></label></fieldset>
-          <fieldset><legend><span>02</span><div><strong>성별을 골라 주세요.</strong><small>한 가지만 선택할 수 있어요.</small></div></legend><div className="choice-grid gender-grid">{GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" value={item} checked={gender === item} onChange={() => setGender(item)} /><span className="choice-check">✓</span><strong>{item}</strong></label>)}</div></fieldset>
-          <fieldset><legend><span>03</span><div><strong>나이에 맞는 칸을 골라 주세요.</strong><small>내 나이가 들어가는 범위를 선택해요.</small></div></legend><div className="choice-grid age-grid">{AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}</div></fieldset>
+          <fieldset><legend><span>02</span><div><strong>성별 <em>선택</em></strong><small>필요하지 않으면 건너뛰어도 됩니다.</small></div></legend><div className="choice-grid gender-grid">{GENDERS.map((item) => <label className={gender === item ? "selected" : ""} key={item}><input type="radio" value={item} checked={gender === item} onChange={() => setGender(item)} /><span className="choice-check">✓</span><strong>{item}</strong></label>)}</div></fieldset>
+          <fieldset><legend><span>03</span><div><strong>연령 구분 <em>선택</em></strong><small>필요하지 않으면 건너뛰어도 됩니다.</small></div></legend><div className="choice-grid age-grid">{AGE_GROUP_OPTIONS.map((item) => <label className={ageGroup === item.value ? "selected" : ""} key={item.value}><input type="radio" value={item.value} checked={ageGroup === item.value} onChange={() => setAgeGroup(item.value)} /><span className="choice-check">✓</span><strong>{item.value}</strong><small>{item.detail}</small></label>)}</div></fieldset>
           {error && <p className="visit-error">{error}</p>}
-          <button className="visit-submit" type="submit" disabled={!canSubmit || submitting}>{submitting ? "참가 등록 중이에요…" : canSubmit ? "참가하기 · 스탬프 투어 시작 →" : "위 내용을 모두 입력해 주세요"}</button>
+          <button className="visit-submit" type="submit" disabled={!canSubmit || submitting}>{submitting ? "참가 등록 중이에요…" : canSubmit ? "참가하기 · 스탬프 투어 시작 →" : "이름을 입력해 주세요"}</button>
         </form>
       </section>
     </main>
   );
 }
 
-function TourCenter({ message, error = false }: { message: string; error?: boolean }) {
-  return <main className="visit-shell visit-center">{error ? <div className="error-symbol">!</div> : <div className="visit-loader" />}<h1>{error ? "QR을 확인해 주세요." : "잠시만 기다려 주세요."}</h1><p>{message}</p></main>;
+function TourCenter({ message, error = false, onRetry }: { message: string; error?: boolean; onRetry?: () => void }) {
+  return <main className="visit-shell visit-center">{error ? <div className="error-symbol">!</div> : <div className="visit-loader" />}<h1>{error ? "QR을 확인해 주세요." : "잠시만 기다려 주세요."}</h1><p>{message}</p>{error && <div className="error-actions">{onRetry && <button onClick={onRetry}>다시 시도</button>}<a href="/" target="_top">모아 안내로 돌아가기</a></div>}</main>;
 }
 
 function formatPeriod(startDate: string, endDate: string) {

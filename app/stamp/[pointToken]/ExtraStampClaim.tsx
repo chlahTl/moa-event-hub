@@ -27,7 +27,7 @@ export default function StampClaim({ pointToken }: { pointToken: string }) {
       .catch((caught) => setError(caught instanceof Error ? caught.message : "스탬프를 등록하지 못했습니다."));
   }, [pointToken]);
 
-  if (error) return <main className="visit-shell visit-center"><div className="error-symbol">!</div><h1>스탬프를 받을 수 없어요.</h1><p>{error}</p></main>;
+  if (error) return <main className="visit-shell visit-center"><div className="error-symbol">!</div><h1>스탬프를 받을 수 없어요.</h1><p>{error}</p><div className="error-actions"><button onClick={() => window.location.reload()}>다시 시도</button><a href="/" target="_top">모아 안내로 돌아가기</a></div></main>;
   if (!result) return <main className="visit-shell visit-center"><div className="visit-loader" /><strong>스탬프를 확인하고 있어요.</strong></main>;
   return (
     <main className="visit-shell success-shell">

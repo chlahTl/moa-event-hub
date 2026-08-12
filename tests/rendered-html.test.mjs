@@ -32,8 +32,9 @@ test("server-renders the Moa landing page", async () => {
   const html = await response.text();
   assert.match(html, /<title>모아 \| 행사 참여를 한곳에<\/title>/i);
   assert.match(html, /행사 참여를/);
-  assert.match(html, /동아리별 QR/);
-  assert.match(html, /href="\/admin"/);
+  assert.match(html, /부스별 QR/);
+  assert.match(html, /href="\/signin\?returnTo=%2Fadmin"/);
+  assert.match(html, /로그인하고 행사 만들기/);
 });
 
 test("uses native navigation links that work in the vinext client", async () => {
@@ -44,7 +45,7 @@ test("uses native navigation links that work in the vinext client", async () => 
 
   assert.doesNotMatch(landing, /next\/link/);
   assert.doesNotMatch(dashboard, /next\/link/);
-  assert.match(landing, /<a href="\/admin" target="_top"[^>]*>첫 행사 만들기/);
+  assert.match(landing, /<a href="\/signin\?returnTo=%2Fadmin" target="_top"[^>]*>로그인하고 행사 만들기/);
 });
 
 test("keeps participant names and club responses connected", async () => {
@@ -130,7 +131,7 @@ test("club operations support custom guidance, safe offline retry, editing and e
   assert.match(claimRoute, /targetClub\.stampMessage/);
   assert.match(exportRoute, /searchParams\.get\("clubId"\)/);
   assert.match(exportRoute, /eq\(responses\.clubId, clubId\)/);
-  assert.match(dashboard, /요건·제출 안내/);
+  assert.match(dashboard, /다음 행동 안내/);
   assert.match(dashboard, /실적 CSV/);
   assert.match(dashboard, /\/admin\/paper\/\$\{selected\.id\}\?clubId=\$\{club\.id\}/);
   assert.match(dashboard, /window\.confirm/);
