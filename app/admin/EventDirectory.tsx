@@ -83,9 +83,9 @@ export default function EventDirectory<T extends DirectoryEvent>({
     <section className="event-directory" id="events" aria-labelledby="event-directory-title">
       <div className="event-directory-heading">
         <div>
-          <p>EVENT WORKSPACE</p>
-          <h2 id="event-directory-title">행사 찾기</h2>
-          <span>대한민국 날짜 기준으로 운영할 행사를 빠르게 선택하세요.</span>
+          <p>행사 전환</p>
+          <h2 id="event-directory-title">운영할 행사 선택</h2>
+          <span>현재 운영할 행사를 선택하거나 지난 행사를 찾아보세요.</span>
         </div>
         <div className="event-view-tabs" role="tablist" aria-label="행사 보관 상태">
           <button role="tab" aria-selected={view === "active"} className={view === "active" ? "active" : ""} onClick={() => onViewChange("active")}>운영 행사</button>
@@ -138,12 +138,12 @@ export default function EventDirectory<T extends DirectoryEvent>({
         )} />
       ) : (
         <div className="event-groups">
-          <EventGroup title="진행 중·예정 행사" subtitle="오늘 참여할 수 있는 행사와 앞으로 열릴 행사" events={currentAndUpcoming} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 진행 중·예정 행사가 없습니다." : "진행 중이거나 예정된 행사가 없습니다."} renderEvent={(event) => (
+          <EventGroup title="진행 중·예정" subtitle="현재 운영하거나 준비 중인 행사" events={currentAndUpcoming} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 진행 중·예정 행사가 없습니다." : "진행 중이거나 예정된 행사가 없습니다."} renderEvent={(event) => (
             <EventCard key={event.id} event={event} selected={selectedId === event.id} view={view} busy={busyEventId === event.id} onSelect={onSelect} onRequestTrash={onRequestTrash} onRestore={onRestore} onRequestPermanentDelete={onRequestPermanentDelete} />
           )} />
-          <EventGroup title="지난 행사" subtitle="종료일이 지난 행사" events={past} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 지난 행사가 없습니다." : "아직 종료된 행사가 없습니다."} renderEvent={(event) => (
+          {(past.length > 0 || query || statusFilter !== "all") && <EventGroup title="지난 행사" subtitle="종료일이 지난 행사" events={past} emptyMessage={query || statusFilter !== "all" ? "검색 조건에 맞는 지난 행사가 없습니다." : "아직 종료된 행사가 없습니다."} renderEvent={(event) => (
             <EventCard key={event.id} event={event} selected={selectedId === event.id} view={view} busy={busyEventId === event.id} onSelect={onSelect} onRequestTrash={onRequestTrash} onRestore={onRestore} onRequestPermanentDelete={onRequestPermanentDelete} />
-          )} />
+          )} />}
         </div>
       )}
     </section>
@@ -186,7 +186,7 @@ function EventCard<T extends DirectoryEvent>({ event, selected, view, busy, onSe
       <dl className="event-list-meta">
         <div><dt>기간</dt><dd>{formatShortPeriod(range.startDate, range.endDate)}</dd></div>
         <div><dt>장소</dt><dd>{event.location || "장소 미정"}</dd></div>
-        <div><dt>참가자</dt><dd>{event.participantCount.toLocaleString()}명</dd></div>
+        <div><dt>참가 등록</dt><dd>{event.participantCount.toLocaleString()}명</dd></div>
         <div><dt>동아리</dt><dd>{clubCount.toLocaleString()}개</dd></div>
       </dl>
       <p className="event-last-activity">{view === "trash" ? "삭제" : activity === event.updatedAt ? "최근 변경" : "생성"} · {formatActivity(view === "trash" ? event.deletedAt : activity)}</p>

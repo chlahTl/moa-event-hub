@@ -15,12 +15,15 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const error = params.error ? ERROR_MESSAGES[params.error] ?? ERROR_MESSAGES.failed : "";
   return (
     <main className="auth-shell">
+      <section className="auth-context" aria-label="운영자 로그인 안내">
+        <a href="/" className="brand-lockup auth-context-brand" aria-label="모아 홈"><span className="brand-mark">ㅁ</span><span>모아</span></a>
+        <div><span>운영자 전용</span><h2>행사 준비와<br />현장 운영을 이어서</h2><p>행사 생성, 부스 QR 준비, 참가 등록과 부스 참여 현황을 한곳에서 관리합니다.</p></div>
+        <ol><li><b>1</b>행사와 부스 준비</li><li><b>2</b>현장 QR 운영</li><li><b>3</b>참여 결과 확인</li></ol>
+      </section>
       <section className="auth-card">
-        <a href="/" className="brand-lockup auth-brand" aria-label="모아 홈">
-          <span className="brand-mark">ㅁ</span><span>모아</span>
-        </a>
+        <a href="/" className="auth-back-top">← 홈으로</a>
         <p className="auth-kicker">운영자 로그인</p>
-        <h1>행사 운영을<br />시작하세요.</h1>
+        <h1>행사 운영을 시작하세요.</h1>
         <p className="auth-intro">행사 생성과 QR 준비, 참여 현황 확인은 운영자 로그인 후 이용할 수 있습니다. 로그인하면 바로 행사 관리 화면으로 이동합니다.</p>
         {error && <div className="auth-error" role="alert">{error}</div>}
         <div className="auth-provider-list">
@@ -32,7 +35,6 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </a>
         </div>
         <p className="auth-note">참가자는 별도 로그인 없이 행사 QR로 참여할 수 있습니다.</p>
-        <a className="auth-back" href="/">← 소개 화면으로 돌아가기</a>
       </section>
     </main>
   );

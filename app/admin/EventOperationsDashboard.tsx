@@ -652,11 +652,26 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   }
 
   const selectedLifecycle = selected ? getEventLifecycle(selected) : null;
-  const selectedRange = selected ? resolveEventRange(selected) : null;
   const selectedInactive = isInactiveEventStatus(selected?.status);
   const selectedStatus = selectedLifecycle
     ? `${selectedInactive ? "비활성 · " : ""}${EVENT_LIFECYCLE_LABEL[selectedLifecycle]}`
     : "—";
+  const needsFirstClub = Boolean(selected?.stampEnabled && selected.clubs.length === 0);
+  const preparationComplete = Boolean(selected && (!selected.stampEnabled || selected.clubs.length > 0));
+  const eventDirectory = (
+    <EventDirectory
+      events={events}
+      selectedId={selectedId}
+      view={eventView}
+      loading={loading}
+      busyEventId={busyEventId}
+      onSelect={selectEvent}
+      onViewChange={(view) => void changeEventView(view)}
+      onRequestTrash={(event) => void requestEventDeletion(event, "trash")}
+      onRestore={(event) => void restoreEvent(event)}
+      onRequestPermanentDelete={(event) => void requestEventDeletion(event, "permanent")}
+    />
+  );
 
   return (
     <main className="admin-shell">
@@ -687,76 +702,73 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
           <div className="topbar-actions">
             {signOutHref && <a className="admin-signout" href={signOutHref}>로그아웃</a>}
             {selected && <button className="refresh-button" onClick={() => void refreshDashboard()}>↻ 현황 새로고침</button>}
-            {selected ? <>
-              <button className="new-event-secondary" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사</button>
-              {selected.stampEnabled ? <a className="button button-primary small" href="#qr-prep">현장 QR 준비 →</a> : <button className="button button-primary small" onClick={() => setModal("editEvent")}>행사 운영 설정 →</button>}
-            </> : <button className="button button-primary small" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사 만들기</button>}
+            {selected && <button className="new-event-secondary" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사</button>}
+            {!selected && <button className="button button-primary small" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사 만들기</button>}
             <div className="avatar" aria-label={`${displayName} 관리자${adminEmail ? `, ${adminEmail}` : ""}`} title={adminEmail || displayName}>{avatarLabel}</div>
           </div>
         </header>
 
-        <nav className="mobile-section-nav" aria-label="현재 행사 빠른 이동">
-          <a href="#events">행사</a>
-          {selected && <a href="#selected-event-details">준비</a>}
-          {selected?.stampEnabled && <a href="#clubs">부스</a>}
-          {selected && <a href="#field-mode">현장</a>}
-          {selected && <a href="#results">결과</a>}
-        </nav>
+        <label className="mobile-section-select">
+          <span>현재 구간</span>
+          <select aria-label="운영 화면 구간 이동" defaultValue="" onChange={(event) => { if (event.target.value) window.location.hash = event.target.value; }}>
+            <option value="" disabled>이동할 구간 선택</option>
+            <option value="events">행사 전환</option>
+            {selected && <option value="selected-event-details">운영 보드</option>}
+            {selected?.stampEnabled && <option value="clubs">부스·QR</option>}
+            {selected && <option value="field-mode">현장 운영</option>}
+            {selected && <option value="results">행사 결과</option>}
+          </select>
+        </label>
 
         {error && <div className="error-banner" role="alert"><span>!</span>{error}<button className="error-retry" onClick={() => void retryEventLoad()}>목록 새로고침</button><button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
 
         <div className="admin-content" id="overview">
-          <EventDirectory
-            events={events}
-            selectedId={selectedId}
-            view={eventView}
-            loading={loading}
-            busyEventId={busyEventId}
-            onSelect={selectEvent}
-            onViewChange={(view) => void changeEventView(view)}
-            onRequestTrash={(event) => void requestEventDeletion(event, "trash")}
-            onRestore={(event) => void restoreEvent(event)}
-            onRequestPermanentDelete={(event) => void requestEventDeletion(event, "permanent")}
-          />
+          {(eventView === "trash" || loading || !selected) && eventDirectory}
 
           {eventView === "trash" ? null : loading ? null : !selected ? (
             <EmptyState onCreate={() => setModal("event")} />
           ) : (
             <div id="selected-event-details" className="selected-event-details">
-              <div className="event-spotlight">
-                <div>
-                  <p className="eyebrow light"><span /> SELECTED EVENT</p>
-                  <h2>{selected.name}</h2>
-                  <div className="spotlight-status-line"><span className={`event-status-badge ${selectedInactive ? "inactive" : selectedLifecycle}`}>{selectedStatus}</span><p>{formatPeriod(selected)} · {selected.location || "장소 미정"} · {selected.institution}</p></div>
-                  {selected.description && <p className="spotlight-description">{selected.description}</p>}
+              <section className="operation-board" aria-labelledby="operation-event-title">
+                <div className="operation-board-main">
+                  <div className="operation-board-label"><span className={`status-dot ${selectedInactive ? "inactive" : selectedLifecycle}`} />현재 운영 행사</div>
+                  <h2 id="operation-event-title">{selected.name}</h2>
+                  <p>{formatPeriod(selected)} · {selected.location || "장소 미정"}</p>
+                  <div className="operation-board-state"><strong>{selectedStatus}</strong><span>{selected.description || selected.institution}</span></div>
                 </div>
-                <div className="spotlight-number"><strong>{selected.participantCount}</strong><span>행사 참가자</span><button onClick={() => { setParticipantClub(null); setModal("participants"); }}>전체 명단 보기</button></div>
-                <div className="spotlight-actions">
-                  {selected.stampEnabled && <button className="primary-spotlight" disabled={qrBusy} onClick={() => openEventQr(selected)}>참가 등록 QR <span>⌗</span></button>}
-                  <button disabled={Boolean(busyAction)} onClick={() => setModal("editEvent")}>행사 설정 <span>⚙</span></button>
-                  <a className="secondary-spotlight" href={`/admin/paper/${selected.id}`}>종이 기록지 <span>▤</span></a>
-                  <button className="secondary-spotlight" disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>종이 기록 등록 <span>＋</span></button>
+                <dl className="operation-board-metrics">
+                  <div><dt>참가 등록</dt><dd>{selected.participantCount.toLocaleString()}<small>명</small></dd><button onClick={() => { setParticipantClub(null); setModal("participants"); }}>전체 명단 보기</button></div>
+                  <div><dt>부스 참여</dt><dd>{selected.responseCount.toLocaleString()}<small>건</small></dd><span>중복 참여 포함</span></div>
+                  <div><dt>최근 갱신</dt><dd className="refresh-time">{lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "확인 중"}</dd><button onClick={() => void refreshDashboard()}>지금 갱신</button></div>
+                </dl>
+                <div className={`operation-next ${needsFirstClub ? "attention" : "ready"}`}>
+                  {needsFirstClub ? <>
+                    <div><span>준비 필요</span><strong>첫 부스·동아리를 등록해 주세요.</strong><p>현재 QR·스탬프 운영이 켜져 있지만 등록된 부스가 없습니다.</p></div>
+                    <button onClick={() => setModal("club")}>부스 등록 →</button>
+                  </> : <>
+                    <div><span>운영 상태</span><strong>현장 운영 준비 완료</strong><p>{selected.stampEnabled ? `${selected.clubs.length}개 부스가 등록되어 있습니다.` : "수기 접수 방식으로 운영합니다."}</p></div>
+                    {selected.stampEnabled ? <button disabled={qrBusy} onClick={() => openEventQr(selected)}>참가 등록 QR 보기 →</button> : <button onClick={() => setModal("manualRecord")}>수기 접수 등록 →</button>}
+                  </>}
                 </div>
-              </div>
+                <div className="operation-board-tools" aria-label="행사 운영 도구">
+                  <button disabled={Boolean(busyAction)} onClick={() => setModal("editEvent")}>행사 설정</button>
+                  <a href={`/admin/paper/${selected.id}`}>종이 기록지</a>
+                  <button disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>수기 접수</button>
+                </div>
+              </section>
 
-              <div className="event-summary-grid" aria-label={`${selected.name} 운영 요약`}>
-                <EventFact label="기간" value={selectedRange ? formatCompactPeriod(selectedRange.startDate, selectedRange.endDate) : "—"} note="시작일 – 종료일" symbol="◷" />
-                <EventFact label="장소" value={selected.location || "장소 미정"} note={selected.institution} symbol="⌖" />
-                <EventFact label="스탬프 행사" value={selected.stampEnabled ? "사용" : "사용 안 함"} note="행사 설정에서 변경" symbol="◫" />
-                <EventFact label="최근 활동" value={formatSummaryActivity(selected.updatedAt || selected.createdAt)} note={selected.updatedAt ? "최근 변경" : "행사 생성"} symbol="↻" />
-              </div>
+              {eventDirectory}
 
-              <section className="readiness-panel" aria-labelledby="readiness-title">
+              <section className={`readiness-panel ${preparationComplete ? "complete" : "incomplete"}`} aria-labelledby="readiness-title">
                 <div className="readiness-heading">
-                  <div><p>QUICK START</p><h2 id="readiness-title">현장 운영 준비</h2><span>아래 순서대로 확인하면 행사를 시작할 수 있습니다.</span></div>
-                  <strong>{selected.stampEnabled && selected.clubs.length ? "주요 준비 완료" : "준비가 필요해요"}</strong>
+                  <div><p>운영 준비</p><h2 id="readiness-title">{preparationComplete ? "현장 운영 준비 완료" : "확인이 필요한 준비 항목"}</h2><span>현재 저장된 행사 설정을 기준으로 표시합니다.</span></div>
+                  <strong>{preparationComplete ? "✓ 준비 완료" : "! 1개 확인 필요"}</strong>
                 </div>
-                <ol className="readiness-steps">
-                  <li className="done"><span>1</span><div><strong>행사 정보</strong><small>{formatCompactPeriod(resolveEventRange(selected).startDate, resolveEventRange(selected).endDate)} · {selected.location || "장소 미정"}</small></div><button onClick={() => setModal("editEvent")}>확인</button></li>
-                  <li className={selected.stampEnabled ? "done" : "needs-action"}><span>2</span><div><strong>QR·스탬프 운영</strong><small>{selected.stampEnabled ? "사용 중" : "행사 설정에서 켜 주세요"}</small></div><button onClick={() => setModal("editEvent")}>{selected.stampEnabled ? "확인" : "설정"}</button></li>
-                  <li className={selected.clubs.length ? "done" : "needs-action"}><span>3</span><div><strong>부스·동아리</strong><small>{selected.clubs.length ? `${selected.clubs.length}개 등록됨` : "최소 1개를 등록해 주세요"}</small></div><button disabled={!selected.stampEnabled} onClick={() => setModal("club")}>{selected.clubs.length ? "추가" : "등록"}</button></li>
-                  <li className={selected.stampEnabled && selected.clubs.length ? "ready" : "needs-action"}><span>4</span><div><strong>현장 QR 준비</strong><small>참가 등록 QR과 부스 QR을 저장·인쇄하세요.</small></div><a href="#qr-prep">QR 보기</a></li>
-                </ol>
+                <ul className="readiness-rows">
+                  <li><span className="status-mark quiet">✓</span><div><strong>행사 정보</strong><small>{formatCompactPeriod(resolveEventRange(selected).startDate, resolveEventRange(selected).endDate)} · {selected.location || "장소 미정"}</small></div><button onClick={() => setModal("editEvent")}>설정</button></li>
+                  <li><span className="status-mark quiet">✓</span><div><strong>운영 방식</strong><small>{selected.stampEnabled ? "QR·스탬프 사용" : "수기 접수 사용"}</small></div><button onClick={() => setModal("editEvent")}>설정</button></li>
+                  {selected.stampEnabled && <li className={needsFirstClub ? "needs-action" : ""}><span className={`status-mark ${needsFirstClub ? "attention" : "quiet"}`}>{needsFirstClub ? "!" : "✓"}</span><div><strong>부스·동아리</strong><small>{needsFirstClub ? "등록된 부스가 없습니다." : `${selected.clubs.length}개 등록됨`}</small></div><button onClick={() => setModal("club")}>{needsFirstClub ? "등록" : "추가"}</button></li>}
+                </ul>
               </section>
 
               {selected.stampEnabled && <>
@@ -765,8 +777,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                   <div><p>참가자 접속·부스 참여</p><h2>현장 QR 준비</h2><span>참가자는 먼저 참가 등록 QR을, 이후 각 부스 QR을 스캔합니다.</span></div>
                 </div>
                 <div className="qr-prep-grid">
-                  <button className="qr-prep-primary" disabled={qrBusy} onClick={() => openEventQr(selected)}><span>01</span><div><strong>참가 등록 QR</strong><small>입구에 비치 · 처음 한 번 스캔</small></div><b>보기·저장 →</b></button>
-                  {selected.clubs.map((club, index) => <button key={club.id} disabled={qrBusy} onClick={() => openClubQr(club)}><span>{String(index + 2).padStart(2, "0")}</span><div><strong>{club.name}</strong><small>부스 참여 QR</small></div><b>보기·저장 →</b></button>)}
+                  <button className="qr-prep-primary" disabled={qrBusy} onClick={() => openEventQr(selected)}><span className="qr-type-icon">⌗</span><div><strong>참가 등록 QR</strong><small>입구에 비치 · 처음 한 번 스캔</small></div><em>발급됨</em><b>보기·저장 →</b></button>
+                  {selected.clubs.map((club) => <button key={club.id} disabled={qrBusy} onClick={() => openClubQr(club)}><span className="qr-type-icon">⌗</span><div><strong>{club.name}</strong><small>부스 참여 QR</small></div><em>발급됨</em><b>보기·저장 →</b></button>)}
                 </div>
               </section>
 
@@ -779,15 +791,10 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                   <div className="club-grid">
                     {selected.clubs.map((club, index) => (
                       <article className="club-card" key={club.id}>
-                        <div className="club-card-top"><span>{club.stampEmoji || String(index + 1).padStart(2, "0")}</span><button disabled={qrBusy} onClick={() => openClubQr(club)} aria-label={`${club.name} QR 보기`}>⌗</button></div>
+                        <div className="club-card-top"><span>{club.stampEmoji || `부스 ${index + 1}`}</span><span className="club-availability"><i /> QR 발급됨</span></div>
                         <h3>{club.name} <small>· {club.responseCount}명</small></h3>
                         <p>{club.description || "부스·동아리 참여"}</p>
-                        <div className="field-tags">
-                          <span>이름</span>
-                          <span>성별</span>
-                          <span>연령 구분</span>
-                        </div>
-                        <div className="club-card-footer"><button onClick={() => { setParticipantClub(club); setModal("participants"); }}>참가자 명단 →</button><button disabled={qrBusy} onClick={() => openClubQr(club)}>부스 참여 QR →</button></div>
+                        <div className="club-card-footer"><button onClick={() => { setParticipantClub(club); setModal("participants"); }}>참가자 명단 →</button><button disabled={qrBusy} onClick={() => openClubQr(club)}>부스 참여 QR</button></div>
                         <div className="club-manage-actions">
                           <button disabled={Boolean(busyAction)} onClick={() => openClubEdit(club)}>수정</button>
                           <a href={`/admin/paper/${selected.id}?clubId=${club.id}`}>종이 기록지</a>
@@ -894,16 +901,12 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <section className="empty-state">
       <div className="empty-illustration"><span>＋</span><i /><i /><i /></div>
-      <p className="eyebrow"><span /> EVENT SETUP</p>
+      <p className="eyebrow"><span /> 행사 준비</p>
       <h2>첫 행사를 만들어 보세요.</h2>
       <p>행사를 만든 뒤 동아리를 추가하면 각 동아리 QR이 기본 참여 스탬프로 사용됩니다. 추가 지점은 필요할 때만 더할 수 있습니다.</p>
       <button className="button button-primary" onClick={onCreate}>새 행사 만들기 →</button>
     </section>
   );
-}
-
-function EventFact({ label, value, note, symbol }: { label: string; value: string; note: string; symbol: string }) {
-  return <article className="event-fact-card"><div className="metric-icon" aria-hidden="true">{symbol}</div><p>{label}</p><strong title={value}>{value}</strong><span>{note}</span></article>;
 }
 
 function AgeChart({ items, total }: { items: StatItem[]; total: number }) {
@@ -920,7 +923,7 @@ function GenderChart({ items, total }: { items: StatItem[]; total: number }) {
   const femalePct = Math.round((female / denominator) * 100);
   const malePct = Math.round((male / denominator) * 100);
   if (!items.length) return <ChartEmpty />;
-  return <div className="donut-wrap"><div className="donut" style={{ background: `conic-gradient(#f06d54 0 ${femalePct}%, #123d37 ${femalePct}% ${femalePct + malePct}%, #cbd8d3 ${femalePct + malePct}% 100%)` }}><div><strong>{total}</strong><span>참가자</span></div></div><div className="donut-legend"><p><i className="coral" />여성 <strong>{female}</strong></p><p><i className="teal" />남성 <strong>{male}</strong></p>{other > 0 && <p><i className="gray" />기타 <strong>{other}</strong></p>}</div></div>;
+  return <div className="donut-wrap"><div className="donut" style={{ background: `conic-gradient(#759e91 0 ${femalePct}%, #123d37 ${femalePct}% ${femalePct + malePct}%, #cbd8d3 ${femalePct + malePct}% 100%)` }}><div><strong>{total}</strong><span>참가자</span></div></div><div className="donut-legend"><p><i className="sage" />여성 <strong>{female}</strong></p><p><i className="teal" />남성 <strong>{male}</strong></p>{other > 0 && <p><i className="gray" />기타 <strong>{other}</strong></p>}</div></div>;
 }
 
 function ChartEmpty() {
@@ -1226,13 +1229,6 @@ function formatCompactPeriod(startDate: string, endDate: string) {
   const start = formatter.format(new Date(`${startDate}T00:00:00`));
   if (startDate === endDate) return start;
   return `${start} – ${formatter.format(new Date(`${endDate}T00:00:00`))}`;
-}
-
-function formatSummaryActivity(value?: string | null) {
-  if (!value) return "기록 없음";
-  const parsed = value.includes("T") ? new Date(value) : new Date(`${value.replace(" ", "T")}Z`);
-  if (Number.isNaN(parsed.getTime())) return "기록 없음";
-  return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(parsed);
 }
 
 function escapeHtml(value: string) {
