@@ -48,6 +48,24 @@ test("uses native navigation links that work in the vinext client", async () => 
   assert.match(landing, /<a href="\/signin\?returnTo=%2Fadmin" target="_top"[^>]*>로그인하고 행사 만들기/);
 });
 
+test("separates the event directory from six route-backed management sections", async () => {
+  const [dashboard, eventRoute, eventIndexRoute] = await Promise.all([
+    readFile(new URL("../app/admin/EventOperationsDashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/events/[eventId]/[section]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/events/[eventId]/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  for (const section of ["overview", "field", "clubs", "participants", "results", "settings"]) {
+    assert.match(dashboard, new RegExp(`id: "${section}"`));
+    assert.match(eventRoute, new RegExp(`"${section}"`));
+  }
+  assert.match(dashboard, /운영할 행사를 선택하세요/);
+  assert.match(dashboard, /현재 행사/);
+  assert.match(dashboard, /행사 관리 화면 선택/);
+  assert.match(dashboard, /window\.location\.assign\(`\$\{eventBasePath\}\/\$\{event\.target\.value\}`\)/);
+  assert.match(eventIndexRoute, /\/overview/);
+});
+
 test("keeps participant names and club responses connected", async () => {
   const [visitForm, tourForm, responseRoute, tourOptions, schema, exportRoute, dashboard] = await Promise.all([
     readFile(new URL("../app/visit/[clubId]/GuidedClubVisit.tsx", import.meta.url), "utf8"),

@@ -22,6 +22,7 @@ export type DirectoryEvent = {
   participantCount: number;
   clubCount?: number;
   clubs: unknown[];
+  stampEnabled?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
   deletedAt?: string | null;
@@ -174,6 +175,7 @@ function EventCard<T extends DirectoryEvent>({ event, selected, view, busy, onSe
   const inactive = isInactiveEventStatus(event.status);
   const activity = event.updatedAt || event.createdAt;
   const clubCount = event.clubCount ?? event.clubs.length;
+  const preparationNeeded = Boolean(event.stampEnabled && clubCount === 0);
 
   return (
     <article className={`event-list-card ${selected ? "selected" : ""} ${view === "trash" ? "trashed" : ""}`}>
@@ -187,7 +189,7 @@ function EventCard<T extends DirectoryEvent>({ event, selected, view, busy, onSe
         <div><dt>기간</dt><dd>{formatShortPeriod(range.startDate, range.endDate)}</dd></div>
         <div><dt>장소</dt><dd>{event.location || "장소 미정"}</dd></div>
         <div><dt>참가 등록</dt><dd>{event.participantCount.toLocaleString()}명</dd></div>
-        <div><dt>동아리</dt><dd>{clubCount.toLocaleString()}개</dd></div>
+        <div><dt>준비</dt><dd className={preparationNeeded ? "needs-attention" : "ready"}>{preparationNeeded ? "부스 등록 필요" : "확인 항목 없음"}</dd></div>
       </dl>
       <p className="event-last-activity">{view === "trash" ? "삭제" : activity === event.updatedAt ? "최근 변경" : "생성"} · {formatActivity(view === "trash" ? event.deletedAt : activity)}</p>
       <div className="event-card-actions">

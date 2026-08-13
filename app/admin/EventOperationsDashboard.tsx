@@ -6,7 +6,6 @@ import EventDirectory from "./EventDirectory";
 import {
   EVENT_LIFECYCLE_LABEL,
   getEventLifecycle,
-  getRecommendedEventId,
   getSeoulDateKey,
   isInactiveEventStatus,
   resolveEventRange,
@@ -107,19 +106,31 @@ type DeletionImpact = {
 
 type EventDeletionAction = { kind: "trash" | "permanent"; event: EventItem; impact: DeletionImpact };
 type EventView = "active" | "trash";
+export type AdminSection = "overview" | "field" | "clubs" | "participants" | "results" | "settings";
 
 type AdminDashboardProps = {
   adminName?: string | null;
   adminEmail?: string | null;
   signOutHref?: string | null;
+  eventId?: string | null;
+  section?: AdminSection | "directory";
+  participantClubId?: string | null;
 };
 
 const EMPTY_STATS: Stats = { gender: [], age: [], recent: [], engagement: { averageClubs: 0, totalClubVisits: 0, depth: [] } };
 const SELECTED_EVENT_STORAGE_KEY = "moa.admin.selectedEventId";
+const ADMIN_SECTIONS: { id: AdminSection; label: string; icon: string }[] = [
+  { id: "overview", label: "개요", icon: "⌂" },
+  { id: "field", label: "현장 운영", icon: "◎" },
+  { id: "clubs", label: "부스·QR", icon: "⌗" },
+  { id: "participants", label: "참가자", icon: "◉" },
+  { id: "results", label: "결과", icon: "↗" },
+  { id: "settings", label: "설정", icon: "⚙" },
+];
 
-export default function AdminDashboard({ adminName, adminEmail, signOutHref }: AdminDashboardProps = {}) {
+export default function AdminDashboard({ adminName, adminEmail, signOutHref, eventId = null, section = "directory", participantClubId = null }: AdminDashboardProps = {}) {
   const [events, setEvents] = useState<EventItem[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(eventId || "");
   const [eventView, setEventView] = useState<EventView>("active");
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
   const [manualRecords, setManualRecords] = useState<ManualRecord[]>([]);
@@ -144,7 +155,10 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   const qrLockRef = useRef(false);
   const eventOperationLockRef = useRef("");
 
-  const selected = eventView === "active" ? events.find((event) => event.id === selectedId) ?? events[0] : undefined;
+  const directoryMode = section === "directory" || !eventId;
+  const selected = eventView === "active"
+    ? events.find((event) => event.id === selectedId)
+    : undefined;
   const displayName = adminName?.trim() || adminEmail?.split("@")[0] || "관리자";
   const avatarLabel = Array.from(displayName)[0] || "관";
 
@@ -160,9 +174,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       setLastRefreshedAt(new Date());
       if (view === "active") {
         setSelectedId((current) => {
-          const stored = window.localStorage.getItem(SELECTED_EVENT_STORAGE_KEY) || "";
-          const nextId = [preferredId, current, stored].find((candidate) => candidate && nextEvents.some((item) => item.id === candidate))
-            || getRecommendedEventId(nextEvents);
+          const nextId = [preferredId, current].find((candidate) => candidate && nextEvents.some((item) => item.id === candidate)) || "";
           if (!nextId) window.localStorage.removeItem(SELECTED_EVENT_STORAGE_KEY);
           return nextId;
         });
@@ -175,10 +187,10 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   }, []);
 
   useEffect(() => {
-    loadEvents(undefined, "active").catch((caught) => {
+    loadEvents(eventId || undefined, "active").catch((caught) => {
       setError(friendlyError(caught, "행사를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."));
     });
-  }, [loadEvents]);
+  }, [eventId, loadEvents]);
 
   useEffect(() => {
     if (eventView === "active" && selectedId && events.some((event) => event.id === selectedId)) {
@@ -193,7 +205,7 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   }, [undoEvent]);
 
   useEffect(() => {
-    if (eventView !== "active" || !selected?.id) {
+    if (eventView !== "active" || !selected?.id || (section !== "overview" && section !== "field" && section !== "results")) {
       setStats(EMPTY_STATS);
       return;
     }
@@ -210,10 +222,10 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
         }
       });
     return () => controller.abort();
-  }, [eventView, selected?.id, selected?.participantCount, selected?.responseCount, statsReloadToken]);
+  }, [eventView, section, selected?.id, selected?.participantCount, selected?.responseCount, statsReloadToken]);
 
   useEffect(() => {
-    if (eventView !== "active" || !selected?.id) {
+    if (eventView !== "active" || !selected?.id || (section !== "overview" && section !== "field")) {
       setManualRecords([]);
       return;
     }
@@ -227,16 +239,16 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
         }
       });
     return () => controller.abort();
-  }, [eventView, selected?.id, selected?.participantCount, statsReloadToken]);
+  }, [eventView, section, selected?.id, selected?.participantCount, statsReloadToken]);
 
   useEffect(() => {
-    if (eventView !== "active" || !selected?.id) return;
+    if (eventView !== "active" || !selected?.id || (section !== "overview" && section !== "field")) return;
     const timer = window.setInterval(() => {
       void loadEvents(selected.id, "active", true).catch(() => undefined);
       setStatsReloadToken((current) => current + 1);
     }, 30_000);
     return () => window.clearInterval(timer);
-  }, [eventView, loadEvents, selected?.id]);
+  }, [eventView, loadEvents, section, selected?.id]);
 
   function notify(message: string) {
     setToast(message);
@@ -304,9 +316,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
   }
 
   function selectEvent(eventId: string) {
-    setSelectedId(eventId);
     window.localStorage.setItem(SELECTED_EVENT_STORAGE_KEY, eventId);
-    window.requestAnimationFrame(() => document.querySelector("#selected-event-details")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    window.location.assign(`/admin/events/${encodeURIComponent(eventId)}/overview`);
   }
 
   async function requestEventDeletion(event: EventItem, kind: EventDeletionAction["kind"]) {
@@ -336,7 +347,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       setDeletionAction(null);
       setDeletionError("");
       setUndoEvent({ id: target.id, name: target.name });
-      await loadEvents(undefined, "active");
+      if (directoryMode) await loadEvents(undefined, "active");
+      else window.location.assign("/admin");
     } catch (caught) {
       setDeletionError(friendlyError(caught, "행사를 휴지통으로 이동하지 못했습니다. 다시 시도해 주세요."));
     } finally {
@@ -402,11 +414,8 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       });
       const data = await readApiResponse<{ event?: EventItem }>(response, "새 행사를 만들지 못했습니다.");
       if (!data.event) throw new Error("행사 생성 결과를 확인하지 못했습니다.");
-      setEventView("active");
-      await loadEvents(data.event.id, "active");
-      notify("새 행사를 만들었습니다.");
-      if (data.event.stampEnabled) await openEventQr(data.event);
-      else setModal(null);
+      window.localStorage.setItem(SELECTED_EVENT_STORAGE_KEY, data.event.id);
+      window.location.assign(`/admin/events/${encodeURIComponent(data.event.id)}/overview`);
     } catch (caught) {
       setError(friendlyError(caught, "새 행사를 만들지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요."));
     } finally {
@@ -672,23 +681,27 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       onRequestPermanentDelete={(event) => void requestEventDeletion(event, "permanent")}
     />
   );
+  const activeSection = section === "directory" ? null : ADMIN_SECTIONS.find((item) => item.id === section) ?? ADMIN_SECTIONS[0];
+  const eventBasePath = eventId
+    ? `/admin/events/${encodeURIComponent(eventId)}`
+    : selected ? `/admin/events/${encodeURIComponent(selected.id)}` : "";
+  const scopedParticipantClub = selected?.clubs.find((club) => club.id === participantClubId) ?? null;
 
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
         <a href="/" target="_top" className="brand-lockup brand-admin"><span className="brand-mark">ㅁ</span><span>모아</span></a>
         <p className="workspace-label">행사 운영 워크스페이스</p>
-        <nav className="side-nav" aria-label="관리자 메뉴">
-          <a href="#overview" className="active"><span>⌂</span>대시보드</a>
-          <a href="#events"><span>◇</span>행사 관리</a>
-          {selected?.stampEnabled && <a href="#clubs"><span>⌗</span>부스·동아리</a>}
-          {selected?.stampEnabled && <a href="#stamps"><span>＋</span>추가 지점</a>}
-          {selected && <a href="#results"><span>↗</span>행사 결과</a>}
-          <a href="#field-mode"><span>◎</span>현장 모드</a>
+        {selected && <div className="sidebar-current-event"><span>현재 행사</span><strong>{selected.name}</strong><small>{selectedStatus} · {formatCompactPeriod(resolveEventRange(selected).startDate, resolveEventRange(selected).endDate)}</small></div>}
+        <nav className="side-nav" aria-label={selected ? `${selected.name} 관리 메뉴` : directoryMode ? "관리자 메뉴" : "행사 관리 메뉴"}>
+          {directoryMode ? <a href="/admin" className="active" aria-current="page"><span>◇</span>행사 목록</a> : ADMIN_SECTIONS.map((item) => (
+            <a key={item.id} href={`${eventBasePath}/${item.id}`} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined}><span>{item.icon}</span>{item.label}</a>
+          ))}
         </nav>
         <div className="sidebar-help">
-          <strong>행사별 독립 관리</strong>
-          <p>행사 정보와 참가 기록은 로그인 계정별로 구분됩니다.</p>
+          <strong>{selected ? "다른 행사를 운영하시나요?" : "행사별 독립 관리"}</strong>
+          <p>{selected ? "행사 목록에서 운영할 행사를 변경할 수 있습니다." : "행사 정보와 참가 기록은 로그인 계정별로 구분됩니다."}</p>
+          {selected && <a href="/admin">행사 변경 →</a>}
         </div>
         <a href="/" target="_top" className="back-link">← 소개 화면으로</a>
       </aside>
@@ -696,39 +709,33 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       <section className="admin-main">
         <header className="admin-topbar">
           <div>
-            <p className="breadcrumb">관리자 / 대시보드</p>
-            <h1>안녕하세요, {displayName}님.</h1>
+            <p className="breadcrumb">{directoryMode ? "관리자 / 행사 목록" : selected ? `관리자 / ${selected.name}` : "관리자 / 행사 확인"}</p>
+            <h1>{directoryMode ? `안녕하세요, ${displayName}님.` : activeSection?.label}</h1>
           </div>
           <div className="topbar-actions">
             {signOutHref && <a className="admin-signout" href={signOutHref}>로그아웃</a>}
-            {selected && <button className="refresh-button" onClick={() => void refreshDashboard()}>↻ 현황 새로고침</button>}
-            {selected && <button className="new-event-secondary" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사</button>}
-            {!selected && <button className="button button-primary small" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사 만들기</button>}
+            {selected && (section === "overview" || section === "field") && <button className="refresh-button" onClick={() => void refreshDashboard()}>↻ 현황 새로고침</button>}
+            {directoryMode && <button className="button button-primary small" disabled={Boolean(busyAction)} onClick={() => { setError(""); setModal("event"); }}>＋ 새 행사 만들기</button>}
             <div className="avatar" aria-label={`${displayName} 관리자${adminEmail ? `, ${adminEmail}` : ""}`} title={adminEmail || displayName}>{avatarLabel}</div>
           </div>
         </header>
 
-        <label className="mobile-section-select">
-          <span>현재 구간</span>
-          <select aria-label="운영 화면 구간 이동" defaultValue="" onChange={(event) => { if (event.target.value) window.location.hash = event.target.value; }}>
-            <option value="" disabled>이동할 구간 선택</option>
-            <option value="events">행사 전환</option>
-            {selected && <option value="selected-event-details">운영 보드</option>}
-            {selected?.stampEnabled && <option value="clubs">부스·QR</option>}
-            {selected && <option value="field-mode">현장 운영</option>}
-            {selected && <option value="results">행사 결과</option>}
-          </select>
-        </label>
+        {selected && <div className="mobile-workspace-navigation">
+          <div><span>현재 행사</span><strong>{selected.name}</strong><a href="/admin">변경</a></div>
+          <label><span>현재 화면</span><select aria-label="행사 관리 화면 선택" value={section} onChange={(event) => window.location.assign(`${eventBasePath}/${event.target.value}`)}>{ADMIN_SECTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+        </div>}
 
         {error && <div className="error-banner" role="alert"><span>!</span>{error}<button className="error-retry" onClick={() => void retryEventLoad()}>목록 새로고침</button><button onClick={() => setError("")} aria-label="오류 닫기">×</button></div>}
 
-        <div className="admin-content" id="overview">
-          {(eventView === "trash" || loading || !selected) && eventDirectory}
-
-          {eventView === "trash" ? null : loading ? null : !selected ? (
-            <EmptyState onCreate={() => setModal("event")} />
+        <div className={`admin-content ${directoryMode ? "directory-content" : "workspace-content"}`}>
+          {directoryMode ? <>
+            <div className="directory-page-intro"><div><p>행사 운영</p><h2>운영할 행사를 선택하세요.</h2><span>행사를 선택하면 개요부터 필요한 관리 화면으로 이동합니다.</span></div></div>
+            {eventDirectory}
+          </> : loading ? <div className="workspace-loading" role="status"><span />행사 관리 화면을 불러오는 중입니다.</div> : !selected ? (
+            <section className="workspace-not-found" role="alert"><span>!</span><h2>행사를 찾을 수 없습니다.</h2><p>삭제되었거나 현재 계정에서 관리할 수 없는 행사입니다.</p><a className="button button-primary" href="/admin">행사 목록으로</a></section>
           ) : (
-            <div id="selected-event-details" className="selected-event-details">
+            <div className="selected-event-details">
+              {section === "overview" && <>
               <section className="operation-board" aria-labelledby="operation-event-title">
                 <div className="operation-board-main">
                   <div className="operation-board-label"><span className={`status-dot ${selectedInactive ? "inactive" : selectedLifecycle}`} />현재 운영 행사</div>
@@ -737,103 +744,50 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                   <div className="operation-board-state"><strong>{selectedStatus}</strong><span>{selected.description || selected.institution}</span></div>
                 </div>
                 <dl className="operation-board-metrics">
-                  <div><dt>참가 등록</dt><dd>{selected.participantCount.toLocaleString()}<small>명</small></dd><button onClick={() => { setParticipantClub(null); setModal("participants"); }}>전체 명단 보기</button></div>
+                  <div><dt>참가 등록</dt><dd>{selected.participantCount.toLocaleString()}<small>명</small></dd><a href={`${eventBasePath}/participants`}>전체 명단 보기</a></div>
                   <div><dt>부스 참여</dt><dd>{selected.responseCount.toLocaleString()}<small>건</small></dd><span>중복 참여 포함</span></div>
                   <div><dt>최근 갱신</dt><dd className="refresh-time">{lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "확인 중"}</dd><button onClick={() => void refreshDashboard()}>지금 갱신</button></div>
                 </dl>
                 <div className={`operation-next ${needsFirstClub ? "attention" : "ready"}`}>
                   {needsFirstClub ? <>
                     <div><span>준비 필요</span><strong>첫 부스·동아리를 등록해 주세요.</strong><p>현재 QR·스탬프 운영이 켜져 있지만 등록된 부스가 없습니다.</p></div>
-                    <button onClick={() => setModal("club")}>부스 등록 →</button>
+                    <a href={`${eventBasePath}/settings`}>설정으로 이동 →</a>
                   </> : <>
                     <div><span>운영 상태</span><strong>현장 운영 준비 완료</strong><p>{selected.stampEnabled ? `${selected.clubs.length}개 부스가 등록되어 있습니다.` : "수기 접수 방식으로 운영합니다."}</p></div>
-                    {selected.stampEnabled ? <button disabled={qrBusy} onClick={() => openEventQr(selected)}>참가 등록 QR 보기 →</button> : <button onClick={() => setModal("manualRecord")}>수기 접수 등록 →</button>}
+                    <a href={`${eventBasePath}/${selected.stampEnabled ? "clubs" : "field"}`}>{selected.stampEnabled ? "참가 등록 QR 확인 →" : "현장 운영으로 이동 →"}</a>
                   </>}
                 </div>
-                <div className="operation-board-tools" aria-label="행사 운영 도구">
-                  <button disabled={Boolean(busyAction)} onClick={() => setModal("editEvent")}>행사 설정</button>
-                  <a href={`/admin/paper/${selected.id}`}>종이 기록지</a>
-                  <button disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>수기 접수</button>
-                </div>
               </section>
-
-              {eventDirectory}
 
               <section className={`readiness-panel ${preparationComplete ? "complete" : "incomplete"}`} aria-labelledby="readiness-title">
                 <div className="readiness-heading">
-                  <div><p>운영 준비</p><h2 id="readiness-title">{preparationComplete ? "현장 운영 준비 완료" : "확인이 필요한 준비 항목"}</h2><span>현재 저장된 행사 설정을 기준으로 표시합니다.</span></div>
+                  <div><p>주의 항목</p><h2 id="readiness-title">{preparationComplete ? "확인이 필요한 항목이 없습니다." : "부스 등록이 필요합니다."}</h2><span>현재 저장된 행사 설정을 기준으로 표시합니다.</span></div>
                   <strong>{preparationComplete ? "✓ 준비 완료" : "! 1개 확인 필요"}</strong>
                 </div>
-                <ul className="readiness-rows">
-                  <li><span className="status-mark quiet">✓</span><div><strong>행사 정보</strong><small>{formatCompactPeriod(resolveEventRange(selected).startDate, resolveEventRange(selected).endDate)} · {selected.location || "장소 미정"}</small></div><button onClick={() => setModal("editEvent")}>설정</button></li>
-                  <li><span className="status-mark quiet">✓</span><div><strong>운영 방식</strong><small>{selected.stampEnabled ? "QR·스탬프 사용" : "수기 접수 사용"}</small></div><button onClick={() => setModal("editEvent")}>설정</button></li>
-                  {selected.stampEnabled && <li className={needsFirstClub ? "needs-action" : ""}><span className={`status-mark ${needsFirstClub ? "attention" : "quiet"}`}>{needsFirstClub ? "!" : "✓"}</span><div><strong>부스·동아리</strong><small>{needsFirstClub ? "등록된 부스가 없습니다." : `${selected.clubs.length}개 등록됨`}</small></div><button onClick={() => setModal("club")}>{needsFirstClub ? "등록" : "추가"}</button></li>}
-                </ul>
+                {needsFirstClub && <div className="overview-attention-row"><span className="status-mark attention">!</span><div><strong>등록된 부스가 없습니다.</strong><small>QR·스탬프 운영을 위해 첫 부스를 등록해 주세요.</small></div><a href={`${eventBasePath}/settings`}>설정으로 이동</a></div>}
               </section>
 
-              {selected.stampEnabled && <>
-              <section className="dashboard-section qr-prep-section" id="qr-prep">
+              <div className="overview-split">
+                <section className="overview-summary-panel"><div className="overview-panel-heading"><div><p>부스 핵심 현황</p><h2>{selected.clubs.length}개 부스</h2></div><a href={`${eventBasePath}/clubs`}>부스·QR로 이동 →</a></div>{selected.clubs.length ? <ul>{selected.clubs.slice(0, 5).map((club) => <li key={club.id}><span>{club.name}</span><strong>{club.responseCount}명</strong></li>)}</ul> : <p className="overview-empty-copy">등록된 부스가 없습니다.</p>}</section>
+                <section className="overview-summary-panel"><div className="overview-panel-heading"><div><p>최근 현장 활동</p><h2>최근 참여</h2></div><a href={`${eventBasePath}/results`}>결과로 이동 →</a></div>{stats.recent.length ? <ul>{stats.recent.slice(0, 5).map((item) => <li key={item.id}><span>{item.participantName} · {item.clubName}</span><time>{formatDateTime(item.createdAt)}</time></li>)}</ul> : <p className="overview-empty-copy">아직 부스 참여 기록이 없습니다.</p>}</section>
+              </div>
+              </>}
+
+              {section === "clubs" && <section className="workspace-page-section qr-prep-section" aria-labelledby="qr-page-title">
                 <div className="dashboard-heading">
-                  <div><p>참가자 접속·부스 참여</p><h2>현장 QR 준비</h2><span>참가자는 먼저 참가 등록 QR을, 이후 각 부스 QR을 스캔합니다.</span></div>
+                  <div><p>참가자 접속·부스 참여</p><h2 id="qr-page-title">부스·QR</h2><span>참가 등록 QR과 각 부스 QR의 발급 상태를 확인하고 저장·인쇄합니다.</span></div>
                 </div>
-                <div className="qr-prep-grid">
+                {selected.stampEnabled ? <div className="qr-prep-grid">
                   <button className="qr-prep-primary" disabled={qrBusy} onClick={() => openEventQr(selected)}><span className="qr-type-icon">⌗</span><div><strong>참가 등록 QR</strong><small>입구에 비치 · 처음 한 번 스캔</small></div><em>발급됨</em><b>보기·저장 →</b></button>
-                  {selected.clubs.map((club) => <button key={club.id} disabled={qrBusy} onClick={() => openClubQr(club)}><span className="qr-type-icon">⌗</span><div><strong>{club.name}</strong><small>부스 참여 QR</small></div><em>발급됨</em><b>보기·저장 →</b></button>)}
-                </div>
-              </section>
+                  {selected.clubs.map((club) => <button key={club.id} disabled={qrBusy} onClick={() => openClubQr(club)}><span className="qr-type-icon">⌗</span><div><strong>{club.name}</strong><small>부스 참여 QR · 참가 {club.responseCount}명</small></div><em>발급됨</em><b>보기·저장 →</b></button>)}
+                  {selected.stampPoints.map((point) => <button key={point.id} disabled={qrBusy} onClick={() => openStampQr(point)}><span className="qr-type-icon">＋</span><div><strong>{point.name}</strong><small>추가 지점 QR</small></div><em>{point.active ? "발급됨" : "사용 안 함"}</em><b>보기·저장 →</b></button>)}
+                </div> : <div className="section-empty-state"><strong>QR·스탬프 운영을 사용하지 않습니다.</strong><p>행사 설정에서 현재 운영 방식을 확인할 수 있습니다.</p><a href={`${eventBasePath}/settings`}>설정으로 이동 →</a></div>}
+                <div className="section-footer-link"><a href={`${eventBasePath}/settings`}>부스와 추가 지점 관리 →</a></div>
+              </section>}
 
-              <section className="dashboard-section" id="clubs">
-                <div className="dashboard-heading">
-                  <div><p>기본 스탬프 · 참여 QR</p><h2>부스·동아리</h2></div>
-                  <button className="subtle-button" disabled={Boolean(busyAction)} onClick={() => setModal("club")}>＋ 부스·동아리 추가</button>
-                </div>
-                {selected.clubs.length ? (
-                  <div className="club-grid">
-                    {selected.clubs.map((club, index) => (
-                      <article className="club-card" key={club.id}>
-                        <div className="club-card-top"><span>{club.stampEmoji || `부스 ${index + 1}`}</span><span className="club-availability"><i /> QR 발급됨</span></div>
-                        <h3>{club.name} <small>· {club.responseCount}명</small></h3>
-                        <p>{club.description || "부스·동아리 참여"}</p>
-                        <div className="club-card-footer"><button onClick={() => { setParticipantClub(club); setModal("participants"); }}>참가자 명단 →</button><button disabled={qrBusy} onClick={() => openClubQr(club)}>부스 참여 QR</button></div>
-                        <div className="club-manage-actions">
-                          <button disabled={Boolean(busyAction)} onClick={() => openClubEdit(club)}>수정</button>
-                          <a href={`/admin/paper/${selected.id}?clubId=${club.id}`}>종이 기록지</a>
-                          <a href={`/api/export?eventId=${selected.id}&clubId=${club.id}`}>실적 CSV ↓</a>
-                          <button className="danger" disabled={Boolean(busyAction)} onClick={() => void deleteClub(club)}>{busyAction === `delete-club:${club.id}` ? "삭제 중…" : "삭제"}</button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <button className="empty-clubs" onClick={() => setModal("club")}><span>＋</span><strong>첫 부스·동아리 만들기</strong><small>이름만 입력하면 참여 QR이 바로 만들어집니다.</small></button>
-                )}
-              </section>
+              {section === "participants" && <section className="workspace-page-section" aria-labelledby="participants-page-title"><div className="workspace-page-heading"><div><p>등록 정보·참여 부스</p><h2 id="participants-page-title">{scopedParticipantClub ? `${scopedParticipantClub.name} 참가자` : "참가자"}</h2><span>이름과 등록 정보, 참여한 부스를 검색하고 필요한 정보를 수정합니다.</span></div></div><ParticipantListModal embedded event={selected} club={scopedParticipantClub} onChanged={() => setStatsReloadToken((current) => current + 1)} onClose={() => undefined} /></section>}
 
-              <section className="dashboard-section" id="stamps">
-                <div className="dashboard-heading">
-                  <div><p>선택 기능 · EXTRA POINTS</p><h2>추가 지점 QR</h2></div>
-                  <div className="heading-actions">
-                    <button className="subtle-button" disabled={qrBusy} onClick={() => openEventQr(selected)}>초대 QR 보기</button>
-                    <button className="subtle-button" disabled={Boolean(busyAction)} onClick={() => setModal("stampPoint")}>＋ 추가 지점</button>
-                  </div>
-                </div>
-                {selected.stampPoints.length ? (
-                  <div className="stamp-admin-grid">
-                    {selected.stampPoints.map((point, index) => (
-                      <article className="stamp-admin-card" key={point.id}>
-                        <div className="stamp-admin-number">{String(index + 1).padStart(2, "0")}</div>
-                        <div><h3>{point.name}</h3><p>{point.description || "현장에서 QR을 스캔해 방문을 인증합니다."}</p></div>
-                        <span className={point.active ? "active" : "inactive"}>{point.active ? "사용 가능" : "사용 안 함"}</span>
-                        <button disabled={qrBusy} onClick={() => openStampQr(point)}>QR 보기 · 저장 →</button>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <button className="empty-clubs" onClick={() => setModal("stampPoint")}><span>⌗</span><strong>선택: 추가 지점 만들기</strong><small>별도의 포토존·안내 지점이 필요할 때만 사용합니다.</small></button>
-                )}
-              </section>
-
-              <section className="results-section" id="results" aria-labelledby="results-title">
+              {section === "results" && <section className="results-section workspace-page-section" aria-labelledby="results-title">
                 <div className="section-divider-heading"><div><p>행사 결과</p><h2 id="results-title">참여 현황과 결과</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
               <div className="analytics-grid">
                 <section className="panel" id="responses">
@@ -855,18 +809,27 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
                 <div className="panel-heading"><div><p>최근 활동</p><h2>최근 응답</h2></div><a href={`/api/export?eventId=${selected.id}`}>전체 실적 CSV ↓</a></div>
                 <RecentTable items={stats.recent} />
               </section>
-              </section>
-              </>}
+              <section className="panel club-results-panel"><div className="panel-heading"><div><p>부스별 결과</p><h2>부스 참여</h2></div></div><ul>{selected.clubs.map((club) => <li key={club.id}><span>{club.name}</span><strong>{club.responseCount}명</strong><a href={`/api/export?eventId=${selected.id}&clubId=${club.id}`}>CSV ↓</a></li>)}</ul></section>
+              </section>}
 
-              <section className="panel manual-record-panel field-mode-panel" id="field-mode">
+              {section === "field" && <section className="panel manual-record-panel field-mode-panel workspace-page-section">
                 <div className="panel-heading">
-                  <div><p>현장 접수 · FIELD MODE</p><h2>현장 운영</h2><span>30초마다 자동 갱신 · {lastRefreshedAt ? `${lastRefreshedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준` : "확인 중"}</span></div>
+                  <div><p>현장 접수</p><h2>현장 운영</h2><span>30초마다 자동 갱신 · {lastRefreshedAt ? `${lastRefreshedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준` : "확인 중"}</span></div>
                   <div className="heading-actions"><a className="subtle-button" href={`/admin/paper/${selected.id}`}>기록지 인쇄</a><button className="subtle-button" disabled={Boolean(busyAction)} onClick={() => setModal("manualRecord")}>＋ 기록 등록</button></div>
                 </div>
                 <div className="field-mode-summary"><div><span>참가자</span><strong>{selected.participantCount}명</strong></div><div><span>부스 참여</span><strong>{selected.responseCount}건</strong></div><button onClick={() => void refreshDashboard()}>↻ 지금 새로고침</button></div>
                 <h3 className="paper-record-title">수기 접수 기록</h3>
                 <ManualRecordTable records={manualRecords} stampEnabled={selected.stampEnabled} />
-              </section>
+                <div className="field-recent-activity"><div className="overview-panel-heading"><div><p>최근 참가 및 부스 활동</p><h2>최근 활동</h2></div><a href={`${eventBasePath}/results`}>전체 결과 →</a></div><RecentTable items={stats.recent} /></div>
+              </section>}
+
+              {section === "settings" && <section className="workspace-page-section settings-page" aria-labelledby="settings-title">
+                <div className="workspace-page-heading"><div><p>행사 운영 설정</p><h2 id="settings-title">설정</h2><span>행사 정보와 운영 방식, 부스와 추가 지점을 관리합니다.</span></div><button className="button button-primary" onClick={() => setModal("editEvent")}>행사 정보 수정</button></div>
+                <div className="settings-summary-rows"><div><span>행사 기간</span><strong>{formatPeriod(selected)}</strong></div><div><span>장소</span><strong>{selected.location || "장소 미정"}</strong></div><div><span>운영 방식</span><strong>{selected.stampEnabled ? "QR·스탬프 사용" : "수기 접수 사용"}</strong></div></div>
+                <section className="settings-group"><div className="dashboard-heading"><div><p>부스 관리</p><h2>부스·동아리</h2></div><button className="subtle-button" onClick={() => setModal("club")}>＋ 부스 추가</button></div>{selected.clubs.length ? <div className="settings-item-list">{selected.clubs.map((club) => <article key={club.id}><div><strong>{club.name}</strong><span>{club.description || "설명 없음"} · 참가 {club.responseCount}명</span></div><div><a href={`${eventBasePath}/participants?clubId=${club.id}`}>참가자 명단 →</a><button onClick={() => openClubEdit(club)}>수정</button><a href={`/admin/paper/${selected.id}?clubId=${club.id}`}>종이 기록지</a><button className="danger" onClick={() => void deleteClub(club)}>삭제</button></div></article>)}</div> : <div className="section-empty-state"><strong>등록된 부스가 없습니다.</strong><button className="subtle-button" onClick={() => setModal("club")}>첫 부스 등록</button></div>}</section>
+                {selected.stampEnabled && <section className="settings-group"><div className="dashboard-heading"><div><p>선택 기능</p><h2>추가 지점</h2></div><button className="subtle-button" onClick={() => setModal("stampPoint")}>＋ 추가 지점</button></div>{selected.stampPoints.length ? <div className="settings-item-list">{selected.stampPoints.map((point) => <article key={point.id}><div><strong>{point.name}</strong><span>{point.description || "설명 없음"}</span></div><div><button disabled={qrBusy} onClick={() => openStampQr(point)}>QR 확인</button></div></article>)}</div> : <p className="settings-empty-copy">추가 지점이 없습니다. 필요할 때만 생성하세요.</p>}</section>}
+                <section className="danger-zone"><div><p>위험한 관리</p><h2>행사 삭제</h2><span>행사를 휴지통으로 이동하면 공개 QR 참여가 중단됩니다.</span></div><button onClick={() => void requestEventDeletion(selected, "trash")}>행사 휴지통으로 이동</button></section>
+              </section>}
 
             </div>
           )}
@@ -894,18 +857,6 @@ export default function AdminDashboard({ adminName, adminEmail, signOutHref }: A
       {undoEvent && <div className="undo-toast" role="status" aria-live="polite"><div><strong>행사를 휴지통으로 이동했습니다.</strong><span>“{undoEvent.name}” · 10초 동안 바로 되돌릴 수 있습니다.</span></div><button disabled={busyEventId === undoEvent.id} onClick={() => void restoreEvent(undoEvent, true)}>실행 취소</button><button className="undo-close" onClick={() => setUndoEvent(null)} aria-label="알림 닫기">×</button></div>}
       {toast && <div className="toast" role="status"><span>✓</span>{toast}</div>}
     </main>
-  );
-}
-
-function EmptyState({ onCreate }: { onCreate: () => void }) {
-  return (
-    <section className="empty-state">
-      <div className="empty-illustration"><span>＋</span><i /><i /><i /></div>
-      <p className="eyebrow"><span /> 행사 준비</p>
-      <h2>첫 행사를 만들어 보세요.</h2>
-      <p>행사를 만든 뒤 동아리를 추가하면 각 동아리 QR이 기본 참여 스탬프로 사용됩니다. 추가 지점은 필요할 때만 더할 수 있습니다.</p>
-      <button className="button button-primary" onClick={onCreate}>새 행사 만들기 →</button>
-    </section>
   );
 }
 
@@ -995,7 +946,7 @@ function ModalShell({ title, kicker, closeDisabled = false, onClose, children }:
   return <div className="modal-backdrop" role="presentation"><dialog ref={dialogRef} className="modal" open aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}><button className="modal-close" disabled={closeDisabled} onClick={onClose} aria-label="닫기">×</button><p className="modal-kicker">{kicker}</p><h2 id={titleId}>{title}</h2>{children}</dialog></div>;
 }
 
-function ParticipantListModal({ event, club, onChanged, onClose }: { event: EventItem; club: Club | null; onChanged: () => void; onClose: () => void }) {
+function ParticipantListModal({ event, club, onChanged, onClose, embedded = false }: { event: EventItem; club: Club | null; onChanged: () => void; onClose: () => void; embedded?: boolean }) {
   const [records, setRecords] = useState<ParticipantListRecord[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1062,10 +1013,9 @@ function ParticipantListModal({ event, club, onChanged, onClose }: { event: Even
     }
   }
 
-  return (
-    <ModalShell title={club ? `${club.name} · ${records.length}명` : `전체 참가자 · ${records.length}명`} kicker={club ? "동아리 참가자" : "행사 참가자"} closeDisabled={saving} onClose={onClose}>
+  const content = <>
       <p className="modal-intro">{club ? "이 동아리에 참여한 명단입니다." : `${event.name}에 참가 등록한 전체 명단입니다.`}</p>
-      <label className="participant-search">참가자 검색<input autoFocus type="search" value={query} onChange={(change) => setQuery(change.target.value)} placeholder="이름, 성별, 연령, 소속 또는 동아리" /></label>
+      <label className="participant-search">참가자 검색<input autoFocus={!embedded} type="search" value={query} onChange={(change) => setQuery(change.target.value)} placeholder="이름, 성별, 연령, 소속 또는 동아리" /></label>
       <div className="participant-list-summary"><strong>{visibleRecords.length}명</strong><span>{query ? `전체 ${records.length}명 중 검색 결과` : "현재 명단"}</span><a href={club ? `/api/export?eventId=${event.id}&clubId=${club.id}` : `/api/export?eventId=${event.id}&scope=participants`}>CSV 내려받기 ↓</a></div>
       {error && <div className="participant-inline-error" role="alert">{error}</div>}
       {loading ? <div className="participant-list-state">명단을 불러오는 중입니다.</div> : visibleRecords.length ? (
@@ -1089,8 +1039,10 @@ function ParticipantListModal({ event, club, onChanged, onClose }: { event: Even
           ))}
         </div>
       ) : <div className="participant-list-state">{query ? "검색 결과가 없습니다." : "아직 등록된 참가자가 없습니다."}</div>}
-    </ModalShell>
-  );
+    </>;
+
+  if (embedded) return <div className="participant-page-content">{content}</div>;
+  return <ModalShell title={club ? `${club.name} · ${records.length}명` : `전체 참가자 · ${records.length}명`} kicker={club ? "동아리 참가자" : "행사 참가자"} closeDisabled={saving} onClose={onClose}>{content}</ModalShell>;
 }
 
 function EventModal({ event, busy, onClose, onSubmit }: { event?: EventItem; busy: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
