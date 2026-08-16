@@ -20,6 +20,7 @@ const {
 } = lifecycle;
 const {
   ADMIN_SESSION_COOKIE,
+  authorizeSuperAdminRequest,
   authorizeAdminRequest,
   hasTrustedMutationOrigin,
   safeRelativeReturnPath,
@@ -135,6 +136,46 @@ test("allows same-origin admin mutations and blocks cross-site requests", async 
   assert.equal(crossSite.authorized, false);
 });
 
+test("only the configured owner account can access internal analytics", async () => {
+  const owner = await authorizeSuperAdminRequest(authenticatedRequest("/api/internal/overview"));
+  assert.equal(owner.authorized, true);
+
+  const otherUserId = "regular-user-1";
+  const otherSession = "regular-session-token";
+  database.sqlite.prepare(`
+    INSERT INTO users (id, display_name, email, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  `).run(otherUserId, "일반 이용자", "sh-user@example.com");
+  database.sqlite.prepare(`
+    INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, last_seen_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).run("session-regular", otherUserId, await sha256Hex(otherSession), "2099-01-01T00:00:00.000Z");
+  const denied = await authorizeSuperAdminRequest(new Request("http://localhost/api/internal/overview", {
+    headers: { cookie: `${ADMIN_SESSION_COOKIE}=${otherSession}` },
+  }));
+  assert.equal(denied.authorized, false);
+  if (denied.authorized) assert.fail("regular user reached internal analytics");
+  assert.equal(denied.response.status, 404);
+
+  database.sqlite.prepare(`
+    INSERT INTO login_events (id, user_id, provider, logged_in_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  `).run("login-regular", otherUserId, "google");
+  database.sqlite.prepare(`
+    INSERT INTO events (id, owner_user_id, name, event_date)
+    VALUES (?, ?, ?, ?)
+  `).run("event-regular", otherUserId, "이용자 행사", getSeoulDateKey());
+  const { getInternalOverview } = await import("../lib/internal-analytics.ts");
+  const overview = await getInternalOverview(30, "sh-user");
+  assert.equal(overview.summary.totalUsers, 1);
+  assert.equal(overview.summary.loginCount, 1);
+  assert.equal(overview.summary.activeUsers, 1);
+  assert.equal(overview.summary.totalEvents, 1);
+  assert.equal(overview.users.length, 1);
+  assert.equal(overview.users[0].email, "sh-user@example.com");
+  assert.equal(overview.users[0].loginCount, 1);
+});
+
 test("only accepts safe same-origin return paths", () => {
   assert.equal(safeRelativeReturnPath("/admin?view=trash"), "/admin?view=trash");
   assert.equal(safeRelativeReturnPath("https://attacker.example"), "/admin");
@@ -217,6 +258,21 @@ test("keeps every management API authenticated and owner-scoped", async () => {
   }
 });
 
+test("internal overview is unlinked, non-indexed, and protected on page and API", async () => {
+  const page = await readFile(new URL("../app/internal/overview/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /requireAppUser\("\/internal\/overview"\)/);
+  assert.match(page, /isSuperAdmin\(user\)/);
+  assert.match(page, /notFound\(\)/);
+  assert.match(page, /robots: \{ index: false, follow: false/);
+
+  const route = await readFile(new URL("../app/api/internal/overview/route.ts", import.meta.url), "utf8");
+  assert.match(route, /authorizeSuperAdminRequest/);
+  assert.match(route, /if \(!authorization\.authorized\) return authorization\.response/);
+
+  const home = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(home, /internal\/overview/);
+});
+
 test("service worker never caches administrator, API, or authentication responses", async () => {
   const serviceWorker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
   assert.match(serviceWorker, /url\.pathname === "\/signin"/);
@@ -251,6 +307,7 @@ test("service worker never caches administrator, API, or authentication response
   const networkOnlyPaths = [
     "/admin",
     "/admin/events",
+    "/internal/overview",
     "/api",
     "/api/events",
     "/signin",

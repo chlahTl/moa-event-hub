@@ -59,6 +59,20 @@ export async function ensureDatabase() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS login_events (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      logged_in_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS user_daily_activity (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      activity_date TEXT NOT NULL,
+      request_count INTEGER NOT NULL DEFAULT 1,
+      first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     env.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_audit_logs (
       id TEXT PRIMARY KEY NOT NULL,
       event_id TEXT,
@@ -181,6 +195,18 @@ export async function ensureDatabase() {
     ),
     env.DB.prepare(
       "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_expires ON auth_sessions(user_id, expires_at)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_login_events_user_logged_in ON login_events(user_id, logged_in_at)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_login_events_logged_in ON login_events(logged_in_at)",
+    ),
+    env.DB.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS user_daily_activity_user_date_unique ON user_daily_activity(user_id, activity_date)",
+    ),
+    env.DB.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_user_daily_activity_date ON user_daily_activity(activity_date)",
     ),
   ]);
 
