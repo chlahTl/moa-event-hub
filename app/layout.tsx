@@ -16,7 +16,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description: "행사와 부스·동아리별 참여 정보를 QR로 받고 자동으로 분류·집계합니다.",
     manifest: "/manifest.webmanifest",
     icons: {
-      icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+      icon: [
+        { url: "/favicon.svg", type: "image/svg+xml" },
+        { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      shortcut: [{ url: "/favicon.svg", type: "image/svg+xml" }],
       apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
     },
     openGraph: {

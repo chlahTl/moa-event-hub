@@ -19,6 +19,8 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+const ANALYTICS_RETENTION_DAYS = 90;
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -41,6 +43,13 @@ const worker = {
     }
 
     return handler.fetch(request, env, ctx);
+  },
+  async scheduled(_controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
+    const cutoff = new Date(Date.now() - ANALYTICS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    ctx.waitUntil(env.DB.batch([
+      env.DB.prepare("DELETE FROM login_events WHERE logged_in_at < ?").bind(cutoff),
+      env.DB.prepare("DELETE FROM user_daily_activity WHERE last_seen_at < ?").bind(cutoff),
+    ]).then(() => undefined));
   },
 };
 

@@ -19,6 +19,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   const isAdminRequest = url.pathname === "/admin" || url.pathname.startsWith("/admin/");
+  const isInternalRequest = url.pathname === "/internal" || url.pathname.startsWith("/internal/");
   const isApiRequest = url.pathname === "/api" || url.pathname.startsWith("/api/");
   const isAuthRequest =
     url.pathname === "/signin" ||
@@ -27,7 +28,7 @@ self.addEventListener("fetch", (event) => {
   // Never serve identity-aware pages, application-owned authentication routes,
   // or API data from the service-worker cache. `no-store` also bypasses the
   // browser's HTTP cache for these calls.
-  if (isAdminRequest || isApiRequest || isAuthRequest) {
+  if (isAdminRequest || isInternalRequest || isApiRequest || isAuthRequest) {
     event.respondWith(fetch(request, { cache: "no-store" }));
     return;
   }

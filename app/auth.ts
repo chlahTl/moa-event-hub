@@ -3,9 +3,11 @@ import { and, eq, gt, isNull, lt } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ensureDatabase, getDb } from "../db";
-import { authSessions, events, oauthAccounts, users } from "../db/schema";
+import { authSessions, events, loginEvents, oauthAccounts, userDailyActivity, users } from "../db/schema";
+import { getSeoulDateKey } from "../lib/event-lifecycle";
 
-const LEGACY_OWNER_EMAIL = "choewonhyeog387@gmail.com";
+export const SUPER_ADMIN_EMAIL = "choewonhyeog387@gmail.com";
+export const ANALYTICS_RETENTION_DAYS = 90;
 
 export type OAuthProvider = "google" | "naver";
 
@@ -54,7 +56,11 @@ export async function getCurrentUser(
     ))
     .limit(1);
 
-  return row ? toAppUser(row) : null;
+  if (!row) return null;
+
+  const now = new Date();
+  await recordAuthenticatedActivity(row.id, tokenHash, now);
+  return toAppUser(row);
 }
 
 export async function requireAppUser(returnTo: string): Promise<AppUser> {
@@ -90,6 +96,27 @@ export async function authorizeAdminRequest(
   }
 
   return { authorized: true, user };
+}
+
+export async function authorizeSuperAdminRequest(
+  request: Request,
+): Promise<AdminAuthorization> {
+  const authorization = await authorizeAdminRequest(request);
+  if (!authorization.authorized) return authorization;
+  if (!isSuperAdmin(authorization.user)) {
+    return {
+      authorized: false,
+      response: Response.json({ error: "페이지를 찾을 수 없습니다." }, {
+        status: 404,
+        headers: { "Cache-Control": "no-store, private", Vary: "Cookie" },
+      }),
+    };
+  }
+  return authorization;
+}
+
+export function isSuperAdmin(user: Pick<AppUser, "email">): boolean {
+  return user.email.trim().toLowerCase() === SUPER_ADMIN_EMAIL;
 }
 
 export function getOAuthConfig(provider: OAuthProvider) {
@@ -162,7 +189,20 @@ export async function establishOAuthSession(input: {
     expiresAt: new Date(now.getTime() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000).toISOString(),
     lastSeenAt: nowIso,
   });
-  if (normalizedEmail === LEGACY_OWNER_EMAIL) {
+  try {
+    await db.insert(loginEvents).values({
+      id: crypto.randomUUID(),
+      userId,
+      provider: input.provider,
+      loggedInAt: nowIso,
+    });
+    const retentionCutoff = new Date(now.getTime() - ANALYTICS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    await db.delete(loginEvents).where(lt(loginEvents.loggedInAt, retentionCutoff));
+    await db.delete(userDailyActivity).where(lt(userDailyActivity.lastSeenAt, retentionCutoff));
+  } catch (error) {
+    console.error("Failed to record login analytics", error);
+  }
+  if (normalizedEmail === SUPER_ADMIN_EMAIL) {
     await db.update(events).set({ ownerUserId: userId }).where(isNull(events.ownerUserId));
   }
   return rawSessionToken;
@@ -287,6 +327,26 @@ function toAppUser(row: {
 
 function bindingString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function recordAuthenticatedActivity(userId: string, tokenHash: string, now: Date) {
+  try {
+    const nowIso = now.toISOString();
+    const activityDate = getSeoulDateKey(now);
+    await Promise.all([
+      getDb().update(authSessions).set({ lastSeenAt: nowIso }).where(eq(authSessions.tokenHash, tokenHash)),
+      env.DB.prepare(`INSERT INTO user_daily_activity
+        (id, user_id, activity_date, request_count, first_seen_at, last_seen_at)
+        VALUES (?, ?, ?, 1, ?, ?)
+        ON CONFLICT(user_id, activity_date) DO UPDATE SET
+          request_count = request_count + 1,
+          last_seen_at = excluded.last_seen_at`)
+        .bind(crypto.randomUUID(), userId, activityDate, nowIso, nowIso)
+        .run(),
+    ]);
+  } catch (error) {
+    console.error("Failed to record authenticated activity", error);
+  }
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {

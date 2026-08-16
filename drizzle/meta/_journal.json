@@ -57,6 +57,13 @@
       "when": 1786446285418,
       "tag": "0007_last_zzzax",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786607372600,
+      "tag": "0008_lumpy_blink",
+      "breakpoints": true
     }
   ]
 }

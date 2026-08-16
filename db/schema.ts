@@ -64,6 +64,32 @@ export const authSessions = sqliteTable("auth_sessions", {
   index("idx_auth_sessions_user_expires").on(table.userId, table.expiresAt),
 ]);
 
+export const loginEvents = sqliteTable("login_events", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  loggedInAt: text("logged_in_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("idx_login_events_user_logged_in").on(table.userId, table.loggedInAt),
+  index("idx_login_events_logged_in").on(table.loggedInAt),
+]);
+
+export const userDailyActivity = sqliteTable("user_daily_activity", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  activityDate: text("activity_date").notNull(),
+  requestCount: integer("request_count").notNull().default(1),
+  firstSeenAt: text("first_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("user_daily_activity_user_date_unique").on(table.userId, table.activityDate),
+  index("idx_user_daily_activity_date").on(table.activityDate),
+]);
+
 export const adminAuditLogs = sqliteTable("admin_audit_logs", {
   id: text("id").primaryKey(),
   // Deliberately not a foreign key: permanent event deletion must not erase its audit trail.
